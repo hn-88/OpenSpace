@@ -1,0 +1,71 @@
+# modified from https://github.com/garrettsummerfi3ld/OpenSpace/blob/master/.github/workflows/build.yml
+name: Build
+
+on: workflow_dispatch
+
+
+# Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+env:
+  BUILD_TYPE: Debug
+
+jobs:
+  line-count:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    name: Count lines of code
+    
+    steps:
+      - uses: actions/checkout@v4
+        
+      - name: Count Lines of Code (cloc)
+        uses: djdefi/cloc-action@5
+        
+  build-macos:
+    needs: line-count
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        qt-ver: [6.7]
+        xcode-ver: ['latest-stable']
+    runs-on: ${{ matrix.os }}
+    name: Build on ${{ matrix.os }} (Xcode ${{matrix.xcode-ver}}/Qt ${{ matrix.qt-ver }})
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      # This specifies the Xcode version to use, the default is the latest stable version
+      - name: Setup Xcode version
+        if: matrix.xcode-ver != 'default'
+        uses: maxim-lobanov/setup-xcode@v1.5.1
+        with:
+          xcode-version: ${{ matrix.xcode-ver }}
+
+      # Qt is not friendly to install manually, nor any runner has Qt installed by default, this action resolves this issue
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v3.0.0
+        with:
+          version: ${{ matrix.qt-ver }}
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew upgrade
+          brew install --overwrite boost glew freeimage mpv vulkan-headers vulkan-loader brotli gdal
+
+      # The project will fail to compile unless you run CMake twice, very strange issue
+      - name: Configure CMake
+        run: |
+          cmake -B ${{ env.BUILD_DIR }} -G "Xcode"
+          cmake -B ${{ env.BUILD_DIR }} -G "Xcode" -DOPENSPACE_ENABLE_ALL_MODULES=ON
+
+      # Xcode outputs a lot of noise to the log, this makes it quieter and only outputs on compiler warnings or errors
+      - name: Build
+        run: |
+          cmake --build ${{ github.workspace }}/build --target OpenSpace --config ${{env.BUILD_TYPE}} -- -quiet
