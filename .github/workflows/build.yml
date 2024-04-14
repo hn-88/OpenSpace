@@ -26,9 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest]
+        os: [macos-13]
         qt-ver: [6.7]
-        xcode-ver: ['latest-stable']
+        xcode-ver: ['latest']
     runs-on: ${{ matrix.os }}
     name: Build on ${{ matrix.os }} (Xcode ${{matrix.xcode-ver}}/Qt ${{ matrix.qt-ver }})
     env:
