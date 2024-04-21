@@ -26,9 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest]
+        os: [macos-13]
         qt-ver: [6.7]
-        xcode-ver: ['latest-stable']
+        xcode-ver: ['latest']
     runs-on: ${{ matrix.os }}
     name: Build on ${{ matrix.os }} (Xcode ${{matrix.xcode-ver}}/Qt ${{ matrix.qt-ver }})
     env:
@@ -55,8 +55,22 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # workaround for brew upgrade failing, 
+          # https://github.com/actions/setup-python/issues/577#issuecomment-1365231810
+          # https://github.com/hn-88/OCVWarp/blob/master/.github/workflows/osx-build.yml
+          rm '/usr/local/bin/2to3-3.12'
+          rm '/usr/local/bin/idle3.12' 
+          rm /usr/local/bin/pydoc3.12 
+          rm /usr/local/bin/python3.12 
+          rm /usr/local/bin/python3.12-config
+          rm /usr/local/bin/2to3
+          rm /usr/local/bin/idle3
+          rm /usr/local/bin/pydoc3
+          rm /usr/local/bin/python3
+          rm /usr/local/bin/python3-config
+          rm -Rf /usr/local/lib/node_modules/npm
           brew update
-          brew upgrade
+          #brew upgrade
           brew install --overwrite boost glew freeimage mpv vulkan-headers vulkan-loader brotli gdal
 
       # The project will fail to compile unless you run CMake twice, very strange issue
