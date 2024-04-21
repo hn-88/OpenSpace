@@ -12,7 +12,7 @@ jobs:
     # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
     # You can convert this to a matrix build if you need cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v4
@@ -32,7 +32,13 @@ jobs:
 
     - name: Build
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      run: |
+        # use the build steps at https://docs.openspaceproject.com/en/latest/dev/compiling/ubuntu.html
+        mkdir build
+        cd build
+        #
+        cmake -DCMAKE_BUILD_TYPE:STRING="Release" -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-13 -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-13 -DASSIMP_BUILD_MINIZIP=1 ..
+        make -j
       
     - name: Create appimage
       working-directory: ${{github.workspace}}/build
