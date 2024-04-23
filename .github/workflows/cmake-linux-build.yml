@@ -25,6 +25,9 @@ jobs:
         sudo apt install software-properties-common
         sudo add-apt-repository ppa:ubuntu-toolchain-r/test
         sudo apt install gcc-13 g++-13
+        # for AppImage on 22.04
+        sudo add-apt-repository universe 
+        sudo apt install libfuse2
 
     - name: Build
       # Build your program with the given configuration
