@@ -34,7 +34,7 @@ jobs:
         cd build
         #
         cmake -DCMAKE_BUILD_TYPE:STRING="Release" -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-13 -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-13 -DASSIMP_BUILD_MINIZIP=1 ..
-        make -j 2
+        make -j 4
       
     - name: Create appimage
       working-directory: ${{github.workspace}}/build
@@ -42,22 +42,22 @@ jobs:
       # But instead using linuxdeployqt as in https://github.com/hn-88/OCVWarp/blob/master/.travis.yml
       run: |
         echo "create appimage"
-        mkdir -p appdir/usr/bin ; strip openspace ; cp openspace ./appdir/usr/bin/openspace
-        mkdir -p appdir/usr/share/applications ; cp ../appdir/openspace.desktop ./appdir/usr/share/applications/
-        mkdir -p appdir/usr/share/icons/hicolor/256x256/apps ; cp ../appdir/openspace.png ./appdir/usr/share/icons/hicolor/256x256/apps/
+        mkdir -p appdir/usr/bin ; strip ../bin/OpenSpace ; cp ../bin/OpenSpace ./appdir/usr/bin/OpenSpace
+        mkdir -p appdir/usr/share/applications ; cp ../appdir/OpenSpace.desktop ./appdir/usr/share/applications/
+        mkdir -p appdir/usr/share/icons/hicolor/256x256/apps ; cp ../appdir/OpenSpace.png ./appdir/usr/share/icons/hicolor/256x256/apps/
         wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
         chmod a+x linuxdeployqt-continuous-x86_64.AppImage
         unset QTDIR; unset QT_PLUGIN_PATH ; unset LD_LIBRARY_PATH
         export VERSION=$(git rev-parse --short HEAD) # linuxdeployqt uses this for naming the file
         ./linuxdeployqt-continuous-x86_64.AppImage appdir/usr/share/applications/*.desktop -bundle-non-qt-libs
         ./linuxdeployqt-continuous-x86_64.AppImage appdir/usr/share/applications/*.desktop -appimage
-        mv openspace*.AppImage openspace-0.19.2-x86_64.AppImage -v
+        # mv OpenSpace*.AppImage OpenSpace-0.19.2-x86_64.AppImage -v
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
         # Artifact name
-        name: openspace-appimage
+        name: OpenSpace-appimage.zip
         # optional, default is artifact
         # A file, directory or wildcard pattern that describes what to upload
-        path: build/openspace*x86_64.AppImage
+        path: build/OpenSpace*.AppImage
