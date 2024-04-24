@@ -31,7 +31,8 @@ jobs:
         
     - name: Install dependencies
       run: |
-        sudo apt install glew-utils libpng-dev freeglut3-dev git libxrandr-dev libxinerama-dev xorg-dev libxcursor-dev libcurl4-openssl-dev libxi-dev libasound2-dev libgdal-dev libboost1.74-dev libmpv-dev libvulkan-dev
+        sudo apt install glew-utils libpng-dev freeglut3-dev git libxrandr-dev libxinerama-dev xorg-dev libxcursor-dev libcurl4-openssl-dev libxi-dev libasound2-dev libgdal-dev libboost-all-dev libmpv-dev libvulkan-dev
+        # libboost and qt6 need special handling on 20.04
         sudo apt install software-properties-common
         sudo add-apt-repository ppa:ubuntu-toolchain-r/test
         sudo apt install gcc-13 g++-13
