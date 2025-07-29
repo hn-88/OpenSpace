@@ -18,7 +18,7 @@ rm -rf "$DEPLOY_DIR"
 mkdir -p "$APPDIR/usr/bin"
 
 echo "Copying binary..."
-cp -v "$BUILD_DIR/*" "$APPDIR/usr/bin/"
+cp -v "$BUILD_DIR"/* "$APPDIR/usr/bin/"
 
 echo "Stripping binaries..."
 strip $APPDIR/usr/bin/*
