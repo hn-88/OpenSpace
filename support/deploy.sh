@@ -8,7 +8,7 @@ chmod +x appimagetool-*.AppImage
 # Configuration
 APP_NAME="OpenSpace"
 DEPLOY_DIR="./OpenSpace-0.21.1rc1"
-BUILD_DIR="./bin"
+BUILD_DIR="../bin"
 APPDIR="$DEPLOY_DIR/AppDir"
 APPIMAGETOOL=./appimagetool-*.AppImage # or adjust to full path
 
@@ -18,8 +18,7 @@ rm -rf "$DEPLOY_DIR"
 mkdir -p "$APPDIR/usr/bin"
 
 echo "Copying binary..."
-cp "$BUILD_DIR/$APP_NAME" "$APPDIR/usr/bin/"
-cp "$BUILD_DIR/$APP_NAME_Helper" "$APPDIR/usr/bin/"
+cp -v "$BUILD_DIR/*" "$APPDIR/usr/bin/"
 
 echo "Stripping binaries..."
 strip $APPDIR/usr/bin/*
