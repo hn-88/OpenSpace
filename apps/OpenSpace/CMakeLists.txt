@@ -121,7 +121,12 @@ if (NOT OPENSPACE_HAVE_TESTS)
   # Unless overriden, disable sgct tests if OpenSpace tests are disabled
   set(SGCT_BUILD_TESTS FALSE CACHE BOOL "Enable ghoul unit tests")
 endif()
+# === Step 1: Disable install() rules from vendored dependencies ===
+set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip install() in vendored projects" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/sgct)
+# === reinstate SKIP OFF
+set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
+# === Step 2: Collect runtime libraries built by those deps, which we will do at the end ===
 target_link_libraries(OpenSpace PRIVATE sgct)
 
 set_target_properties(sgct PROPERTIES FOLDER "External")
