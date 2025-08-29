@@ -81,6 +81,21 @@ else ()
   set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_NAME}/${OPENSPACE_VERSION_NUMBER}")
 endif ()
 
+# === Install runtime libraries from ext/* (built shared libs only) ===
+# === We had set CMAKE_SKIP_INSTALL_RULES ON, so they would not be auto-installed.
+file(GLOB_RECURSE EXT_RUNTIME_LIBS
+     "${CMAKE_BINARY_DIR}/ext/*/*.so"
+     "${CMAKE_BINARY_DIR}/ext/*/*.dylib"
+     "${CMAKE_BINARY_DIR}/ext/*/*.dll"
+     "${CMAKE_BINARY_DIR}/apps/OpenSpace/ext/*/*.so"
+     "${CMAKE_BINARY_DIR}/apps/OpenSpace/ext/*/*.dylib"
+     "${CMAKE_BINARY_DIR}/apps/OpenSpace/ext/*/*.dll")
+
+if(EXT_RUNTIME_LIBS)
+    message(STATUS "Installing external runtime libraries: ${EXT_RUNTIME_LIBS}")
+    install(FILES ${EXT_RUNTIME_LIBS} DESTINATION bin)
+endif()
+
 option(OPENSPACE_CREATE_INSTALLER "Create an OpenSpace installer from the package" OFF)
 
 if (OPENSPACE_CREATE_INSTALLER)
