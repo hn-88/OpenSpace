@@ -123,10 +123,18 @@ if (UNIX AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   endif ()
 endif ()
 
+# === Step 1: Disable install() rules from vendored dependencies ===
+set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip install() in vendored projects" FORCE)
 add_subdirectory(ext)
+# reinstate install() rule
+set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
+# === Step 2: Collect all runtime libraries built by those deps at the end ===
 add_subdirectory(src)
 
+
 add_subdirectory(support/coding/codegen)
+
+
 # It is important that the __codegen.h do not actually exist so
 # that this target is never considered as finished
 add_custom_target(
