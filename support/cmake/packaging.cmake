@@ -24,8 +24,13 @@
 
 set(CPACK_MONOLITHIC_INSTALL TRUE)
 
-include(InstallRequiredSystemLibraries)
-set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+# The Windows zip file does not have a top level directory.
+# Also, we're bundling vc_redist.x64.exe instead of bundling system libraries on Windows.
+if (WIN32)
+  set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+else ()
+  include(InstallRequiredSystemLibraries)
+endif ()
 
 set(CPACK_PACKAGE_NAME "OpenSpace")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${PROJECT_SOURCE_DIR}/README.md")
@@ -41,6 +46,40 @@ set(CPACK_PACKAGE_FILE_NAME
   "${CPACK_PACKAGE_NAME} ${OPENSPACE_VERSION_NUMBER}"
 )
 set(CPACK_STRIP_FILES 1)
+
+if (WIN32)
+    # Download vc_redist.x64.exe if not already present
+    set(VC_REDIST_PATH "${CMAKE_BINARY_DIR}/vc_redist.x64.exe")
+    
+    if(NOT EXISTS "${VC_REDIST_PATH}")
+        message(STATUS "Downloading Visual C++ Redistributable...")
+        file(DOWNLOAD
+            "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+            "${VC_REDIST_PATH}"
+            SHOW_PROGRESS
+            STATUS download_status
+            TIMEOUT 60
+        )
+        
+        list(GET download_status 0 status_code)
+        list(GET download_status 1 status_message)
+        
+        if(NOT status_code EQUAL 0)
+            message(FATAL_ERROR "Failed to download VC Redistributable: ${status_message}")
+        endif()
+        
+        message(STATUS "Downloaded VC Redistributable successfully")
+    endif()
+    
+    # Install it with your package
+    if(EXISTS "${VC_REDIST_PATH}")
+        install(FILES "${VC_REDIST_PATH}" 
+                DESTINATION .
+                COMPONENT Runtime)
+    else()
+        message(WARNING "VC Redistributable not found at ${VC_REDIST_PATH}")
+    endif()
+endif ()
 
 install(DIRECTORY
   ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/
@@ -59,6 +98,9 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules/
   PATTERN "*.fs"
   PATTERN "*.vs"
   PATTERN "*.lua"
+  PATTERN "*.py"
+  PATTERN "*.json"
+  PATTERN "*.js"
 )
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/scripts/ DESTINATION scripts)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/shaders/ DESTINATION shaders)
@@ -68,8 +110,41 @@ install(FILES
   ${PROJECT_SOURCE_DIR}/CREDITS.md
   ${PROJECT_SOURCE_DIR}/LICENSE.md
   ${PROJECT_SOURCE_DIR}/README.md
+  ${PROJECT_SOURCE_DIR}/ACKNOWLEDGMENTS.md
+  ${PROJECT_SOURCE_DIR}/CITATION.cff
+  ${PROJECT_SOURCE_DIR}/CODE_OF_CONDUCT.md
+  ${PROJECT_SOURCE_DIR}/COMMIT.md
   DESTINATION .
 )
+
+if (WIN32)
+    # Install all Qt plugins at once
+    install(DIRECTORY 
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/generic"
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/platforms"
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/styles"
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/tls"
+        DESTINATION bin
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.dll"
+    )
+
+    # Install standalone DLLs
+    install(FILES
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/dxcompiler.dll"
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/dxil.dll"
+        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/opengl32sw.dll"
+        DESTINATION bin
+        COMPONENT Runtime
+        OPTIONAL
+    )
+    # Install node.exe
+    install(FILES "${CMAKE_SOURCE_DIR}/modules/webgui/ext/nodejs/node.exe"
+        DESTINATION modules/webgui/ext/nodejs
+        COMPONENT Runtime
+        OPTIONAL
+    )
+endif ()
 
 if (WIN32)
   set(CPACK_GENERATOR ZIP)
