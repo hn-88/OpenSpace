@@ -124,25 +124,88 @@ install(FILES
 
 if (WIN32)
     # Install all Qt plugins at once
-    install(DIRECTORY 
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/generic"
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/platforms"
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/styles"
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/tls"
-        DESTINATION bin
+    # Use environment variable QT6_DIR, or fallback to CMake Qt6_DIR
+    if(DEFINED ENV{QT6_DIR})
+        set(QT_INSTALL_DIR "$ENV{QT6_DIR}")
+        message(STATUS "Using QT6_DIR from environment: ${QT_INSTALL_DIR}")
+    else()
+        # Fallback for local builds
+        get_filename_component(QT_INSTALL_DIR "${Qt6_DIR}/../../.." ABSOLUTE)
+        message(STATUS "Using Qt6_DIR from CMake: ${QT_INSTALL_DIR}")
+    endif()
+    
+    install(FILES "${QT_INSTALL_DIR}/bin/opengl32sw.dll"
+        DESTINATION bin COMPONENT Runtime OPTIONAL)
+    
+    install(FILES "${QT_INSTALL_DIR}/plugins/generic/qtuiotouchplugin.dll"
+        DESTINATION bin/generic COMPONENT Runtime OPTIONAL)
+    
+    install(FILES "${QT_INSTALL_DIR}/plugins/platforms/qwindows.dll"
+        DESTINATION bin/platforms COMPONENT Runtime OPTIONAL)
+    
+    install(FILES "${QT_INSTALL_DIR}/plugins/styles/qmodernwindowsstyle.dll"
+        DESTINATION bin/styles COMPONENT Runtime OPTIONAL)
+    
+    install(DIRECTORY "${QT_INSTALL_DIR}/plugins/tls/"
+        DESTINATION bin/tls
         COMPONENT Runtime
         FILES_MATCHING PATTERN "*.dll"
-    )
+        OPTIONAL)
 
-    # Install standalone DLLs
-    install(FILES
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/dxcompiler.dll"
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/dxil.dll"
-        "${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/opengl32sw.dll"
-        DESTINATION bin
-        COMPONENT Runtime
-        OPTIONAL
-    )
+    # Install DirectX DLLs - find the correct architecture
+    # Install DirectX Shader Compiler DLLs from Windows SDK
+    # Detect architecture for correct path
+    if(WIN32)
+        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+            if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
+                set(DX_ARCH "arm64")
+            else()
+                set(DX_ARCH "x64")
+            endif()
+        else()
+            set(DX_ARCH "x86")
+        endif()
+        
+        message(STATUS "DirectX DLL architecture: ${DX_ARCH}")
+        
+        set(WINDOWS_KITS_DIR "C:/Program Files (x86)/Windows Kits/10")
+        
+        # Find the latest SDK version
+        file(GLOB SDK_VERSIONS 
+            LIST_DIRECTORIES true
+            "${WINDOWS_KITS_DIR}/bin/*"
+        )
+        
+        if(SDK_VERSIONS)
+            # Sort and get the latest version
+            list(SORT SDK_VERSIONS)
+            list(REVERSE SDK_VERSIONS)
+            list(GET SDK_VERSIONS 0 LATEST_SDK_VERSION)
+            get_filename_component(SDK_VERSION "${LATEST_SDK_VERSION}" NAME)
+            
+            message(STATUS "Using Windows SDK version: ${SDK_VERSION}")
+            
+            set(DX_COMPILER_PATH "${WINDOWS_KITS_DIR}/bin/${SDK_VERSION}/${DX_ARCH}/dxcompiler.dll")
+            set(DX_IL_PATH "${WINDOWS_KITS_DIR}/bin/${SDK_VERSION}/${DX_ARCH}/dxil.dll")
+            
+            if(EXISTS "${DX_COMPILER_PATH}" AND EXISTS "${DX_IL_PATH}")
+                message(STATUS "Found dxcompiler.dll: ${DX_COMPILER_PATH}")
+                message(STATUS "Found dxil.dll: ${DX_IL_PATH}")
+                
+                install(FILES 
+                    "${DX_COMPILER_PATH}"
+                    "${DX_IL_PATH}"
+                    DESTINATION bin
+                    COMPONENT Runtime
+                )
+            else()
+                message(WARNING "DirectX Shader Compiler DLLs not found for ${DX_ARCH} architecture")
+            endif()
+        else()
+            message(WARNING "Windows SDK not found at ${WINDOWS_KITS_DIR}")
+        endif()
+    endif()
+    
     # Install node.exe
     install(FILES "${CMAKE_SOURCE_DIR}/modules/webgui/ext/nodejs/node.exe"
         DESTINATION modules/webgui/ext/nodejs
