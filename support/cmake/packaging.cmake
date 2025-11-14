@@ -47,14 +47,23 @@ set(CPACK_PACKAGE_FILE_NAME
 )
 set(CPACK_STRIP_FILES 1)
 
-if (WIN32)
-    # Download vc_redist.x64.exe if not already present
-    set(VC_REDIST_PATH "${CMAKE_BINARY_DIR}/vc_redist.x64.exe")
+# Detect architecture and download appropriate VC Redistributable
+if(WIN32)
+    # only 64-bit builds are supported
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
+        set(VC_REDIST_URL "https://aka.ms/vs/17/release/vc_redist.arm64.exe")
+        set(VC_REDIST_FILENAME "vc_redist.arm64.exe")
+    else()
+        set(VC_REDIST_URL "https://aka.ms/vs/17/release/vc_redist.x64.exe")
+        set(VC_REDIST_FILENAME "vc_redist.x64.exe")
+    endif()
+        
+    set(VC_REDIST_PATH "${CMAKE_BINARY_DIR}/${VC_REDIST_FILENAME}")
     
     if(NOT EXISTS "${VC_REDIST_PATH}")
-        message(STATUS "Downloading Visual C++ Redistributable...")
+        message(STATUS "Downloading Visual C++ Redistributable for ${CMAKE_SYSTEM_PROCESSOR}...")
         file(DOWNLOAD
-            "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+            "${VC_REDIST_URL}"
             "${VC_REDIST_PATH}"
             SHOW_PROGRESS
             STATUS download_status
@@ -72,14 +81,10 @@ if (WIN32)
     endif()
     
     # Install it with your package
-    if(EXISTS "${VC_REDIST_PATH}")
-        install(FILES "${VC_REDIST_PATH}" 
-                DESTINATION .
-                COMPONENT Runtime)
-    else()
-        message(WARNING "VC Redistributable not found at ${VC_REDIST_PATH}")
-    endif()
-endif ()
+    install(FILES "${VC_REDIST_PATH}" 
+            DESTINATION .
+            COMPONENT Runtime)
+endif()
 
 install(DIRECTORY
   ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/
