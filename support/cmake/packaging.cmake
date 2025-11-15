@@ -125,6 +125,7 @@ install(FILES
 if (WIN32)
     # Install all Qt plugins at once
     # Use environment variable QT6_DIR, or fallback to CMake Qt6_DIR
+    # Use environment variable QT6_DIR
     if(DEFINED ENV{QT6_DIR})
         set(QT_INSTALL_DIR "$ENV{QT6_DIR}")
         message(STATUS "Using QT6_DIR from environment: ${QT_INSTALL_DIR}")
@@ -146,16 +147,17 @@ if (WIN32)
     install(FILES "${QT_INSTALL_DIR}/plugins/styles/qmodernwindowsstyle.dll"
         DESTINATION bin/styles COMPONENT Runtime OPTIONAL)
     
+    # Fix: OPTIONAL must come before FILES_MATCHING
     install(DIRECTORY "${QT_INSTALL_DIR}/plugins/tls/"
         DESTINATION bin/tls
         COMPONENT Runtime
+        OPTIONAL
         FILES_MATCHING PATTERN "*.dll"
-        OPTIONAL)
-
-    # Install DirectX DLLs - find the correct architecture
+    )
+    
     # Install DirectX Shader Compiler DLLs from Windows SDK
-    # Detect architecture for correct path
     if(WIN32)
+        # Determine target architecture
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
                 set(DX_ARCH "arm64")
@@ -170,10 +172,9 @@ if (WIN32)
         
         set(WINDOWS_KITS_DIR "C:/Program Files (x86)/Windows Kits/10")
         
-        # Find the latest SDK version
+        # Find SDK versions - look for directories that match version pattern (e.g., 10.0.xxxxx.x)
         file(GLOB SDK_VERSIONS 
-            LIST_DIRECTORIES true
-            "${WINDOWS_KITS_DIR}/bin/*"
+            "${WINDOWS_KITS_DIR}/bin/10.0.*"
         )
         
         if(SDK_VERSIONS)
@@ -200,9 +201,11 @@ if (WIN32)
                 )
             else()
                 message(WARNING "DirectX Shader Compiler DLLs not found for ${DX_ARCH} architecture")
+                message(WARNING "  Expected: ${DX_COMPILER_PATH}")
+                message(WARNING "  Expected: ${DX_IL_PATH}")
             endif()
         else()
-            message(WARNING "Windows SDK not found at ${WINDOWS_KITS_DIR}")
+            message(WARNING "Windows SDK not found at ${WINDOWS_KITS_DIR}/bin/10.0.*")
         endif()
     endif()
     
