@@ -75,6 +75,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -87,6 +88,19 @@ namespace {
 
     constexpr float   AtmosphereEpsilon  = 2000.f;
     constexpr double  KilometerToMeter   = 1000.0;
+
+    bool isNoGpuDoubleEnvSet() {
+        for (const char* varName : { "NO_GPU_DOUBLE", "NO_DOUBLE", "OPENSPACE_NO_GPU_DOUBLE" }) {
+            const char* val = std::getenv(varName);
+            if (val && std::string_view(val) != "0" &&
+                std::string_view(val) != "false" &&
+                std::string_view(val) != "FALSE")
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     template <GLenum colorBufferAttachment = GL_COLOR_ATTACHMENT0>
     void saveTextureFile(const std::filesystem::path& fileName, const glm::ivec2& size) {
@@ -240,31 +254,28 @@ AtmosphereDeferredcaster::AtmosphereDeferredcaster(float textureScale,
     std::memset(_uniformNameBuffer, '\0', sizeof(_uniformNameBuffer));
     std::strcpy(_uniformNameBuffer, "shadowDataArray[");
     _shadowDataArrayCache.reserve(_shadowConfArray.size());
+
+    _gpuSupportsDouble = !isNoGpuDoubleEnvSet();
 }
 
 void AtmosphereDeferredcaster::initialize() {
     ZoneScoped;
 
     // ---------------------------------------------------------------------------
-    // Detect GPU double-precision support.
-    // GL_ARB_gpu_shader_fp64 is required for dvec/dmat uniform types.
-    // When absent we compile the shader with #define NO_GPU_DOUBLE and use the
-    // float hi/lo emulation path.
+    // Select precision path based on NO_GPU_DOUBLE environment variable.
+    // When set (e.g. NO_GPU_DOUBLE=1), the dedicated atmosphere_deferred_fs_float.glsl
+    // shader is used without any double-precision GPU types.
+    // When not set, the native double-precision shader atmosphere_deferred_fs.glsl
+    // is used.
     // ---------------------------------------------------------------------------
-    _gpuSupportsDouble = false;
-    GLint numExtensions = 0;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
-    for (GLint i = 0; i < numExtensions; i++) {
-        const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
-        if (ext && std::string_view(ext) == "GL_ARB_gpu_shader_fp64") {
-            _gpuSupportsDouble = true;
-            break;
-        }
-    }
-
+    _gpuSupportsDouble = !isNoGpuDoubleEnvSet();
     if (!_gpuSupportsDouble) {
-        LINFO("GPU does not advertise GL_ARB_gpu_shader_fp64. "
-              "Atmosphere shader will use float-emulation path (NO_GPU_DOUBLE).");
+        LINFO("NO_GPU_DOUBLE environment variable is set. "
+              "Atmosphere shader will use float-emulation path (atmosphere_deferred_fs_float.glsl).");
+    }
+    else {
+        LINFO("NO_GPU_DOUBLE environment variable is not set. "
+              "Atmosphere shader will use native double-precision path (atmosphere_deferred_fs.glsl).");
     }
 
     _transmittanceTableTexture = createTexture(_transmittanceTableSize, "Transmittance");
@@ -627,6 +638,9 @@ void AtmosphereDeferredcaster::postRaycast(const RenderData&, const Deferredcast
 }
 
 std::filesystem::path AtmosphereDeferredcaster::deferredcastFSPath() const {
+    if (!_gpuSupportsDouble) {
+        return absPath("${MODULE_ATMOSPHERE}/shaders/atmosphere_deferred_fs_float.glsl");
+    }
     return absPath("${MODULE_ATMOSPHERE}/shaders/atmosphere_deferred_fs.glsl");
 }
 

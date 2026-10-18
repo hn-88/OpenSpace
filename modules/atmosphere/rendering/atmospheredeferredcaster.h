@@ -189,8 +189,8 @@ private:
     std::vector<ShadowRenderingStruct>  _shadowDataArrayCache;
     bool _hardShadowsEnabled = false;
 
-    // GPU capability flag — set once in initialize() via GL extension query.
-    // When false, the shader is compiled with #define NO_GPU_DOUBLE and all
+    // Precision mode flag — determined by the NO_GPU_DOUBLE environment variable.
+    // When false, the dedicated atmosphere_deferred_fs_float.glsl shader is loaded and
     // transform uniforms are sent as float hi/lo pairs.
     bool _gpuSupportsDouble = true;
 
