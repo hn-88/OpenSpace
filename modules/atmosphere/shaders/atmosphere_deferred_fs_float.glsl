@@ -57,10 +57,9 @@
 // ---------------------------------------------------------------------------
 // Float-emulation path (selected when NO_GPU_DOUBLE=1 is set in the environment).
 //
-// This shader uses NO double types anywhere. Precision is maintained via:
-//   - km-space coordinates (eliminating large world-space metre offsets)
-//   - Split-precision mat4 hi/lo pairs and df64 arithmetic for transforms
-//   - Object-space km shadow calculations
+// This shader uses NO native double types (dvec/dmat/double). All 64-bit precision
+// calculations are performed using Dekker/Veltkamp two-float (df64) arithmetic.
+// This guarantees smooth, artifact-free rendering on GPUs/drivers lacking fp64.
 // ---------------------------------------------------------------------------
 
 #version __CONTEXT__
@@ -103,37 +102,38 @@ uniform sampler2D mainNormalTexture;
 uniform sampler2D mainColorTexture;
 
 // ---------------------------------------------------------------------------
-// Transform matrix uniforms — float emulation uses (hi, lo) pairs of mat4.
+// Transform matrix uniforms — Dekker/Veltkamp (hi, lo) pairs of mat4.
 // ---------------------------------------------------------------------------
 uniform mat4  inverseModelTransformMatrix_hi;
 uniform mat4  inverseModelTransformMatrix_lo;
 uniform mat4  modelTransformMatrix_hi;
 uniform mat4  modelTransformMatrix_lo;
-uniform mat4  viewToObjectMatrix_hi;
-uniform mat4  viewToObjectMatrix_lo;
+uniform mat4  viewToWorldMatrix_hi;
+uniform mat4  viewToWorldMatrix_lo;
 uniform mat4  projectionToModelTransformMatrix_hi;
 uniform mat4  projectionToModelTransformMatrix_lo;
 
 uniform vec4  viewport;
 uniform vec2  resolution;
 
-// Camera & sun direction — camera split into hi/lo km, sun is unit vector.
+// Camera & sun direction — camera position split into (hi, lo) in meters.
 uniform vec3  camPosObj_hi;
 uniform vec3  camPosObj_lo;
 uniform vec3  sunDirectionObj;
 
 /*******************************************************************************
- ***** ALL CALCULATIONS FOR ECLIPSE IN FLOAT PATH ARE IN OBJECT-SPACE KM *******
+ ***** ALL CALCULATIONS FOR ECLIPSE ARE IN METERS AND IN WORLD SPACE SYSTEM ****
  *******************************************************************************/
 const uint NumberOfShadows = 1;
 
 struct ShadowRenderingStruct {
-  float xu;               // umbra distance, km
-  float xp;               // penumbra distance, km
-  float rs;               // source radius, km (kept for struct layout compatibility)
-  float rc;               // caster radius, km
-  vec3  sourceCasterVec;  // unit direction vector (object-space)
-  vec3  casterPositionVec;// planet-relative position, object-space km
+  float xu;
+  float xp;
+  float rs;
+  float rc;
+  vec3  sourceCasterVec;
+  vec3  casterPositionVec_hi;
+  vec3  casterPositionVec_lo;
   bool  isShadowing;
 };
 
@@ -143,14 +143,17 @@ uniform bool hardShadows;
 
 // Returns whether there is an eclipse in the x component and the strength of the
 // shadowing in the y component
-vec2 calcShadow(ShadowRenderingStruct shadowInfoArray[NumberOfShadows], vec3 position,
+vec2 calcShadow(ShadowRenderingStruct shadowInfoArray[NumberOfShadows], df64_vec3 position,
                 bool ground, float daylightFactor)
 {
   if (!shadowInfoArray[0].isShadowing) {
     return vec2(0.0, 1.0);
   }
 
-  vec3 pc = shadowInfoArray[0].casterPositionVec - position;
+  df64_vec3 casterPos = df64_vec3(shadowInfoArray[0].casterPositionVec_hi,
+                                  shadowInfoArray[0].casterPositionVec_lo);
+  df64_vec3 pc_df = df64_vec3_sub(casterPos, position);
+  vec3 pc = pc_df.hi + pc_df.lo;
   vec3 scNorm = shadowInfoArray[0].sourceCasterVec;
   vec3 pcProj = dot(pc, scNorm) * scNorm;
   vec3 d = pc - pcProj;
@@ -270,21 +273,31 @@ bool atmosphereIntersection(Ray ray, out float offset, out float maxLength) {
 
 /*
  * Calculates Intersection Ray by walking through graphics pipeline transformations
- * in reverse.
+ * in reverse using full-precision Dekker/Veltkamp arithmetic.
  */
 Ray calculateRayRenderableGlobe(vec2 st) {
   vec2  interpolatedNDCPos = (st - 0.5) * 2.0;
   vec4  clipCoords = vec4(interpolatedNDCPos, 1.0, 1.0);
 
-  // Clip to Object Coords (km) using split mat4
-  vec4 objectCoords = df64_mat4MulVec4(projectionToModelTransformMatrix_hi,
-                                       projectionToModelTransformMatrix_lo, clipCoords);
-  objectCoords.xyz /= objectCoords.w;
+  // Clip to Object Coords (in meters) using exact df64 matrix multiplication
+  df64_vec4 objectCoords = df64_mat4_mul_vec4(
+    projectionToModelTransformMatrix_hi,
+    projectionToModelTransformMatrix_lo,
+    clipCoords
+  );
+
+  // Perspective divide in df64: objectCoords.xyz /= objectCoords.w
+  df64_vec3 objPos = df64_project(objectCoords);
 
   // Building Ray in object space (km)
+  // ray.direction = normalize(objectCoords.xyz - camPosObj)
+  df64_vec3 camPos = df64_vec3(camPosObj_hi, camPosObj_lo);
+  df64_vec3 dir_df = df64_vec3_sub(objPos, camPos);
+  vec3 dir = dir_df.hi + dir_df.lo;
+
   Ray ray;
-  ray.origin    = camPosObj_hi + camPosObj_lo;
-  ray.direction = normalize(objectCoords.xyz * 0.001 - ray.origin);
+  ray.origin    = (camPosObj_hi + camPosObj_lo) * 0.001; // meters -> km
+  ray.direction = normalize(dir);
   return ray;
 }
 
@@ -449,6 +462,7 @@ void main() {
     return;
   }
 
+  // Get the ray from camera to atm in object space using Dekker/Veltkamp precision
   Ray ray = calculateRayRenderableGlobe(in_data.texCoords);
 
   float offset    = 0.0;  // km
@@ -459,25 +473,30 @@ void main() {
     return;
   }
 
-  // Normal from view space to object space using pre-multiplied viewToObject matrix
+  // Normal from view space to object space using df64 matrix operations
   vec4 normalViewSpaceAndWaterReflectance = texture(mainNormalTexture, st);
-  vec4 normalView4 = vec4(normalViewSpaceAndWaterReflectance.xyz, 0.0);
-  vec4 normalObj   = df64_mat4MulVec4(viewToObjectMatrix_hi, viewToObjectMatrix_lo, normalView4);
+  vec4 normalViewSpace = vec4(normalViewSpaceAndWaterReflectance.xyz, 0.0);
+  df64_vec4 normWorld = df64_mat4_mul_vec4(viewToWorldMatrix_hi, viewToWorldMatrix_lo, normalViewSpace);
+  df64_vec4 normObj   = df64_mat4_mul_df64_vec4(inverseModelTransformMatrix_hi, inverseModelTransformMatrix_lo, normWorld);
   vec4 normal;
-  normal.xyz = normalize(normalObj.xyz);
+  normal.xyz = normalize(normObj.hi.xyz + normObj.lo.xyz);
   normal.w   = normalViewSpaceAndWaterReflectance.w;
 
-  // Position from view space to object space (metres), then convert to km
+  // OS Eye to World coords (meters)
   vec4 position = texture(mainPositionTexture, st);
-  vec4 posObj_m = df64_mat4MulVec4(viewToObjectMatrix_hi, viewToObjectMatrix_lo, position);
-  vec3 positionObjectsCoords = posObj_m.xyz * 0.001;
+  df64_vec4 positionWorldCoords = df64_mat4_mul_vec4(viewToWorldMatrix_hi, viewToWorldMatrix_lo, position);
 
-  // pixelDepth in km: compensated subtraction between camPosObj and positionObjectsCoords
-  vec3 diff_hi, diff_lo;
-  df64_vec3_sub(camPosObj_hi, camPosObj_lo,
-                positionObjectsCoords, vec3(0.0),
-                diff_hi, diff_lo);
-  float pixelDepth = df64_vec3_length(diff_hi, diff_lo);
+  // World to Object coords (meters)
+  df64_vec4 positionObjectsCoords_m = df64_mat4_mul_df64_vec4(
+    inverseModelTransformMatrix_hi,
+    inverseModelTransformMatrix_lo,
+    positionWorldCoords
+  );
+
+  // Distance of the pixel in the gBuffer to the observer (meters)
+  df64_vec3 camPos = df64_vec3(camPosObj_hi, camPosObj_lo);
+  df64_vec3 depthDiff = df64_vec3_sub(camPos, df64_vec3(positionObjectsCoords_m.hi.xyz, positionObjectsCoords_m.lo.xyz));
+  float pixelDepth = df64_vec3_length(depthDiff);
 
   float dC = length(camPosObj_hi + camPosObj_lo);
   const float X1 = 1e8;
@@ -491,14 +510,32 @@ void main() {
     pixelDepth += VarA * dC + VarB;
   }
 
+  // All calculations are done in KM:
+  pixelDepth *= 0.001;
+  vec3 positionObjectsCoords = (positionObjectsCoords_m.hi.xyz + positionObjectsCoords_m.lo.xyz) * 0.001;
+
   if (pixelDepth < offset) {
     // ATM Occluded - Something in front of ATM
     out_color = color;
     return;
   }
 
-  float t  = offset;
-  vec3  x  = ray.origin + t * ray.direction;
+  // Following paper nomenclature
+  float t = offset;
+  vec3  x = ray.origin + t * ray.direction;
+
+  df64_vec4 onATMPos_m = df64_mat4_mul_vec4(
+    modelTransformMatrix_hi,
+    modelTransformMatrix_lo,
+    vec4(x * 1000.0, 1.0)
+  );
+  df64_vec4 sunDirWorld_m = df64_mat4_mul_vec4(
+    modelTransformMatrix_hi,
+    modelTransformMatrix_lo,
+    vec4(sunDirectionObj, 0.0)
+  );
+  vec3 sunDirectionWorld = normalize(sunDirWorld_m.hi.xyz + sunDirWorld_m.lo.xyz);
+
   float r  = length(x);
   vec3  v  = vec3(ray.direction);
   float mu = 0.0;
@@ -507,18 +544,18 @@ void main() {
 
   pixelDepth -= offset;
 
-  // Direction to sun in world coordinates for daylight factor calculation
-  vec4 sunDirWorld4 = df64_mat4MulVec4(modelTransformMatrix_hi, modelTransformMatrix_lo,
-                                      vec4(sunDirectionObj, 0.0));
-  vec3 sunDirectionWorld = normalize(sunDirWorld4.xyz);
-
-  vec4 normalWorld4 = df64_mat4MulVec4(modelTransformMatrix_hi, modelTransformMatrix_lo,
-                                      vec4(normal.xyz, 0.0));
+  // normalWorldSpace for daylightFactor
+  vec3 normalWorldSpace = normalize(normWorld.hi.xyz + normWorld.lo.xyz);
   float daylightFactor = clamp(
-    dot(normalize(normalWorld4.xyz), sunDirectionWorld) * 4.0 + 0.5, 0.0, 1.0);
+    dot(normalWorldSpace, sunDirectionWorld) * 4.0 + 0.5, 0.0, 1.0);
 
-  // Eclipse shadow calculation in object-space km
-  vec2 eclipseShadowATM = calcShadow(shadowDataArray, x, false, daylightFactor);
+  // Eclipse shadow calculation in world meters using df64
+  vec2 eclipseShadowATM = calcShadow(
+    shadowDataArray,
+    df64_vec3(onATMPos_m.hi.xyz, onATMPos_m.lo.xyz),
+    false,
+    daylightFactor
+  );
   float sunIntensityInscatter = sunRadiance * eclipseShadowATM.y;
 
   float irradianceFactor = 0.0;
@@ -531,8 +568,12 @@ void main() {
 
   vec3 atmColor = vec3(0.0);
   if (groundHit) {
-    vec2 eclipseShadowPlanet = calcShadow(shadowDataArray, positionObjectsCoords, true,
-      daylightFactor);
+    vec2 eclipseShadowPlanet = calcShadow(
+      shadowDataArray,
+      df64_vec3(positionWorldCoords.hi.xyz, positionWorldCoords.lo.xyz),
+      true,
+      daylightFactor
+    );
     float sunIntensityGround = sunRadiance * eclipseShadowPlanet.y;
     atmColor = groundColor(x, tF, v, s, attenuation, color.rgb, normal.xyz,
       irradianceFactor, normal.w, sunIntensityGround);

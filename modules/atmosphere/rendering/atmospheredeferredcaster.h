@@ -133,12 +133,11 @@ private:
         camPosObj, sunDirectionObj) _uniformCacheDouble;
 
     // Float-emulation uniforms (used when _gpuSupportsDouble == false)
-    // Each dmat4 is split into two mat4 (hi + lo); camPosObj into two vec3.
-    // viewToObject = inverseModel * viewToWorld, pre-collapsed on the CPU.
+    // Each dmat4 is split into two mat4 (hi + lo); camPosObj into two vec3 (meters).
     UniformCache(
         inverseModelTransformMatrix_hi, inverseModelTransformMatrix_lo,
         modelTransformMatrix_hi,        modelTransformMatrix_lo,
-        viewToObjectMatrix_hi,          viewToObjectMatrix_lo,
+        viewToWorldMatrix_hi,           viewToWorldMatrix_lo,
         projectionToModelTransformMatrix_hi, projectionToModelTransformMatrix_lo,
         camPosObj_hi, camPosObj_lo,
         sunDirectionObj) _uniformCacheFloat;

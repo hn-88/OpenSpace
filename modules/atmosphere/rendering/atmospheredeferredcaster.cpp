@@ -451,25 +451,21 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
         program.setUniform(_uniformCacheFloat.modelTransformMatrix_hi, mt_hi);
         program.setUniform(_uniformCacheFloat.modelTransformMatrix_lo, mt_lo);
 
-        // viewToObject = inverseModel * viewToWorld  (pre-collapsed on CPU to
-        // save one dmat4 multiply in the shader per fragment)
-        const glm::dmat4 viewToObject = invModelMatrix * viewToWorld;
-        auto [vto_hi, vto_lo] = splitDmat4(viewToObject);
-        program.setUniform(_uniformCacheFloat.viewToObjectMatrix_hi, vto_hi);
-        program.setUniform(_uniformCacheFloat.viewToObjectMatrix_lo, vto_lo);
+        // viewToWorldMatrix split
+        auto [vtw_hi, vtw_lo] = splitDmat4(viewToWorld);
+        program.setUniform(_uniformCacheFloat.viewToWorldMatrix_hi, vtw_hi);
+        program.setUniform(_uniformCacheFloat.viewToWorldMatrix_lo, vtw_lo);
 
         // projectionToModelTransformMatrix split
         auto [pm_hi, pm_lo] = splitDmat4(invWholePipeline);
         program.setUniform(_uniformCacheFloat.projectionToModelTransformMatrix_hi, pm_hi);
         program.setUniform(_uniformCacheFloat.projectionToModelTransformMatrix_lo, pm_lo);
 
-        // camPosObj: sent in KILOMETRES (not metres) so the float magnitude is
-        // bounded by the camera's distance from the planet centre in km.
-        // The hi/lo split is used in the shader only for the one subtraction
-        // camPosObj - positionObjectsCoords that causes cancellation.
-        const glm::dvec3 camKm = glm::dvec3(camPosObjCoords) * 0.001;
-        const glm::vec3  cam_hi = glm::vec3(camKm);
-        const glm::vec3  cam_lo = glm::vec3(camKm - glm::dvec3(cam_hi));
+        // camPosObj: sent in METERS as (hi, lo) pair, matching double path units.
+        // Full Dekker/Veltkamp arithmetic handles arbitrary distances with ~48-bit precision.
+        const glm::dvec3 camPosM = glm::dvec3(camPosObjCoords);
+        const glm::vec3  cam_hi = glm::vec3(camPosM);
+        const glm::vec3  cam_lo = glm::vec3(camPosM - glm::dvec3(cam_hi));
         program.setUniform(_uniformCacheFloat.camPosObj_hi, cam_hi);
         program.setUniform(_uniformCacheFloat.camPosObj_lo, cam_lo);
 
@@ -588,36 +584,27 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
                 program.setUniform(_uniformNameBuffer, sd.casterPositionVec);
             }
             else {
-                // Float-emulation path: send shadow geometry in object-space km so it
-                // shares the same coordinate frame as x and positionObjectsCoords in the
-                // shader (both planet-centre-relative km).  float32 is sufficient:
-                //   Moon at 384 400 km → ULP ~0.04 km  ✓
-                //   Umbra at 1.4e9 km  → ULP ~140 km (~0.01 % of shadow length) ✓
-                //
-                // casterPositionVec (world-space metres, absolute) → object-space km
-                const glm::dvec3 relCasterWorld =
-                    sd.casterPositionVec - data.modelTransform.translation;
-                const glm::dvec3 relCasterObj =
-                    glm::dvec3(invModelMatrix * glm::dvec4(relCasterWorld, 0.0));
-                // sourceCasterVec is a direction vector; apply orientation only (w=0)
-                const glm::dvec3 srcCasterObj =
-                    glm::dvec3(invModelMatrix * glm::dvec4(sd.sourceCasterVec, 0.0));
-
+                // Float-emulation path: send geometry in metres matching double path.
+                // casterPositionVec is split into (hi, lo) in metres (world space).
                 std::strcpy(bf, "].xp\0");
                 program.setUniform(_uniformNameBuffer,
-                                   static_cast<float>(sd.penumbra    * 0.001)); // m → km
+                                   static_cast<float>(sd.penumbra));
                 std::strcpy(bf, "].xu\0");
                 program.setUniform(_uniformNameBuffer,
-                                   static_cast<float>(sd.umbra       * 0.001)); // m → km
+                                   static_cast<float>(sd.umbra));
                 std::strcpy(bf, "].rc\0");
                 program.setUniform(_uniformNameBuffer,
-                                   static_cast<float>(sd.radiusCaster * 0.001)); // m → km
+                                   static_cast<float>(sd.radiusCaster));
                 std::strcpy(bf, "].sourceCasterVec\0");
                 program.setUniform(_uniformNameBuffer,
-                                   glm::vec3(glm::normalize(srcCasterObj)));
-                std::strcpy(bf, "].casterPositionVec\0");
-                program.setUniform(_uniformNameBuffer,
-                                   glm::vec3(relCasterObj * 0.001)); // m → km
+                                   glm::vec3(sd.sourceCasterVec));
+
+                const glm::vec3 cpos_hi = glm::vec3(sd.casterPositionVec);
+                const glm::vec3 cpos_lo = glm::vec3(sd.casterPositionVec - glm::dvec3(cpos_hi));
+                std::strcpy(bf, "].casterPositionVec_hi\0");
+                program.setUniform(_uniformNameBuffer, cpos_hi);
+                std::strcpy(bf, "].casterPositionVec_lo\0");
+                program.setUniform(_uniformNameBuffer, cpos_lo);
             }
         }
         counter++;
