@@ -75,7 +75,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -86,21 +85,8 @@
 namespace {
     constexpr std::string_view _loggerCat = "AtmosphereDeferredcaster";
 
-    constexpr float   AtmosphereEpsilon  = 2000.f;
-    constexpr double  KilometerToMeter   = 1000.0;
-
-    bool isNoGpuDoubleEnvSet() {
-        for (const char* varName : { "NO_GPU_DOUBLE", "NO_DOUBLE", "OPENSPACE_NO_GPU_DOUBLE" }) {
-            const char* val = std::getenv(varName);
-            if (val && std::string_view(val) != "0" &&
-                std::string_view(val) != "false" &&
-                std::string_view(val) != "FALSE")
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    constexpr float AtmosphereEpsilon = 2000.f;
+    constexpr double KilometerToMeter = 1000.0;
 
     template <GLenum colorBufferAttachment = GL_COLOR_ATTACHMENT0>
     void saveTextureFile(const std::filesystem::path& fileName, const glm::ivec2& size) {
@@ -140,50 +126,50 @@ namespace {
         const glm::dvec3 col3 = glm::dvec3(mv[0][2], mv[1][2], mv[2][2]);
         const glm::dvec3 col4 = glm::dvec3(mv[0][3], mv[1][3], mv[2][3]);
 
-        glm::dvec3 leftNormal   = col4 + col1;
-        glm::dvec3 rightNormal  = col4 - col1;
+        glm::dvec3 leftNormal = col4 + col1;
+        glm::dvec3 rightNormal = col4 - col1;
         glm::dvec3 bottomNormal = col4 + col2;
-        glm::dvec3 topNormal    = col4 - col2;
-        glm::dvec3 nearNormal   = col3 + col4;
-        glm::dvec3 farNormal    = col4 - col3;
+        glm::dvec3 topNormal = col4 - col2;
+        glm::dvec3 nearNormal = col3 + col4;
+        glm::dvec3 farNormal = col4 - col3;
 
         // Plane Distances
-        double leftDistance   = mv[3][3] + mv[3][0];
-        double rightDistance  = mv[3][3] - mv[3][0];
+        double leftDistance = mv[3][3] + mv[3][0];
+        double rightDistance = mv[3][3] - mv[3][0];
         double bottomDistance = mv[3][3] + mv[3][1];
-        double topDistance    = mv[3][3] - mv[3][1];
-        double nearDistance   = mv[3][3] + mv[3][2];
+        double topDistance = mv[3][3] - mv[3][1];
+        double nearDistance = mv[3][3] + mv[3][2];
 
         // Normalize Planes
         const double invLeftMag = 1.0 / glm::length(leftNormal);
-        leftNormal   *= invLeftMag;
+        leftNormal *= invLeftMag;
         leftDistance *= invLeftMag;
 
         const double invRightMag = 1.0 / glm::length(rightNormal);
-        rightNormal   *= invRightMag;
+        rightNormal *= invRightMag;
         rightDistance *= invRightMag;
 
         const double invBottomMag = 1.0 / glm::length(bottomNormal);
-        bottomNormal   *= invBottomMag;
+        bottomNormal *= invBottomMag;
         bottomDistance *= invBottomMag;
 
         const double invTopMag = 1.0 / glm::length(topNormal);
-        topNormal   *= invTopMag;
+        topNormal *= invTopMag;
         topDistance *= invTopMag;
 
         const double invNearMag = 1.0 / glm::length(nearNormal);
-        nearNormal   *= invNearMag;
+        nearNormal *= invNearMag;
         nearDistance *= invNearMag;
 
         const double invFarMag = 1.0 / glm::length(farNormal);
         farNormal *= invFarMag;
 
         const bool outsideFrustum =
-            (((glm::dot(leftNormal,   position) + leftDistance)   < -radius) ||
-            ((glm::dot(rightNormal,   position) + rightDistance)  < -radius) ||
-            ((glm::dot(bottomNormal,  position) + bottomDistance) < -radius) ||
-            ((glm::dot(topNormal,     position) + topDistance)    < -radius) ||
-            ((glm::dot(nearNormal,    position) + nearDistance)   < -radius));
+            (((glm::dot(leftNormal, position) + leftDistance) < -radius) ||
+            ((glm::dot(rightNormal, position) + rightDistance) < -radius) ||
+            ((glm::dot(bottomNormal, position) + bottomDistance) < -radius) ||
+            ((glm::dot(topNormal, position) + topDistance) < -radius) ||
+            ((glm::dot(nearNormal, position) + nearDistance) < -radius));
 
         return !outsideFrustum;
     }
@@ -219,24 +205,6 @@ namespace {
 
 namespace openspace {
 
-// ---------------------------------------------------------------------------
-// Static helper: split a dmat4 into (hi, lo) mat4 pair
-// ---------------------------------------------------------------------------
-std::pair<glm::mat4, glm::mat4>
-AtmosphereDeferredcaster::splitDmat4(const glm::dmat4& m)
-{
-    glm::mat4 hi(0.f), lo(0.f);
-    for (int col = 0; col < 4; col++) {
-        for (int row = 0; row < 4; row++) {
-            const float h      = static_cast<float>(m[col][row]);
-            const float l      = static_cast<float>(m[col][row] - static_cast<double>(h));
-            hi[col][row] = h;
-            lo[col][row] = l;
-        }
-    }
-    return { hi, lo };
-}
-
 AtmosphereDeferredcaster::AtmosphereDeferredcaster(float textureScale,
                                        std::vector<ShadowConfiguration> shadowConfigArray,
                                                               bool saveCalculatedTextures)
@@ -254,33 +222,14 @@ AtmosphereDeferredcaster::AtmosphereDeferredcaster(float textureScale,
     std::memset(_uniformNameBuffer, '\0', sizeof(_uniformNameBuffer));
     std::strcpy(_uniformNameBuffer, "shadowDataArray[");
     _shadowDataArrayCache.reserve(_shadowConfArray.size());
-
-    _gpuSupportsDouble = !isNoGpuDoubleEnvSet();
 }
 
 void AtmosphereDeferredcaster::initialize() {
     ZoneScoped;
 
-    // ---------------------------------------------------------------------------
-    // Select precision path based on NO_GPU_DOUBLE environment variable.
-    // When set (e.g. NO_GPU_DOUBLE=1), the dedicated atmosphere_deferred_fs_float.glsl
-    // shader is used without any double-precision GPU types.
-    // When not set, the native double-precision shader atmosphere_deferred_fs.glsl
-    // is used.
-    // ---------------------------------------------------------------------------
-    _gpuSupportsDouble = !isNoGpuDoubleEnvSet();
-    if (!_gpuSupportsDouble) {
-        LINFO("NO_GPU_DOUBLE environment variable is set. "
-              "Atmosphere shader will use float-emulation path (atmosphere_deferred_fs_float.glsl).");
-    }
-    else {
-        LINFO("NO_GPU_DOUBLE environment variable is not set. "
-              "Atmosphere shader will use native double-precision path (atmosphere_deferred_fs.glsl).");
-    }
-
     _transmittanceTableTexture = createTexture(_transmittanceTableSize, "Transmittance");
-    _irradianceTableTexture    = createTexture(_irradianceTableSize, "Irradiance");
-    _inScatteringTableTexture  = createTexture(_textureSize, "InScattering", 4);
+    _irradianceTableTexture = createTexture(_irradianceTableSize, "Irradiance");
+    _inScatteringTableTexture = createTexture(_textureSize, "InScattering", 4);
     calculateAtmosphereParameters();
 }
 
@@ -303,13 +252,13 @@ float AtmosphereDeferredcaster::eclipseShadow(const glm::dvec3& position) {
 
     const ShadowRenderingStruct& shadow = _shadowDataArrayCache.front();
     const glm::dvec3 positionToCaster = shadow.casterPositionVec - position;
-    const glm::dvec3 sourceToCaster   = shadow.sourceCasterVec; // Normalized
-    const glm::dvec3 casterShadow     =
+    const glm::dvec3 sourceToCaster = shadow.sourceCasterVec; // Normalized
+    const glm::dvec3 casterShadow =
         glm::dot(positionToCaster, sourceToCaster) * sourceToCaster;
     const glm::dvec3 positionToShadow = positionToCaster - casterShadow;
 
     const float distanceToShadow = static_cast<float>(length(positionToShadow));
-    const double shadowLength    = length(casterShadow);
+    const double shadowLength = length(casterShadow);
 
     const float radiusPenumbra = static_cast<float>(
         shadow.radiusCaster * (shadowLength + shadow.penumbra) / shadow.penumbra
@@ -358,19 +307,19 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
     );
 
     // Number of planet radii to use as distance threshold for culling
-    program.setUniform(_uniformCacheCommon.cullAtmosphere, 1);
+    program.setUniform(_uniformCache.cullAtmosphere, 1);
 
     _transmittanceTableTextureUnit.bind(_transmittanceTableTexture);
     program.setUniform(
-        _uniformCacheCommon.transmittanceTexture,
+        _uniformCache.transmittanceTexture,
         _transmittanceTableTextureUnit
     );
 
     _irradianceTableTextureUnit.bind(_irradianceTableTexture);
-    program.setUniform(_uniformCacheCommon.irradianceTexture, _irradianceTableTextureUnit);
+    program.setUniform(_uniformCache.irradianceTexture, _irradianceTableTextureUnit);
 
     _inScatteringTableTextureUnit.bind(_inScatteringTableTexture);
-    program.setUniform(_uniformCacheCommon.inscatterTexture, _inScatteringTableTextureUnit);
+    program.setUniform(_uniformCache.inscatterTexture, _inScatteringTableTextureUnit);
 
     constexpr double DistanceCullingRadii = 5000;
     const glm::dmat4 MV = glm::dmat4(data.camera.sgctInternal.projectionMatrix()) *
@@ -381,104 +330,65 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
         return;
     }
 
-    // ---------------------------------------------------------------------------
-    // Common scalar / vector uniforms (same for both precision paths)
-    // ---------------------------------------------------------------------------
-    program.setUniform(_uniformCacheCommon.cullAtmosphere, 0);
-    program.setUniform(_uniformCacheCommon.opacity, _opacity);
-    program.setUniform(_uniformCacheCommon.rPlanet, _atmospherePlanetRadius);
-    program.setUniform(_uniformCacheCommon.rAtmosphere, _atmosphereRadius);
-    program.setUniform(_uniformCacheCommon.groundRadianceEmission, _groundRadianceEmission);
-    program.setUniform(_uniformCacheCommon.rayleighHeightScale, _rayleighHeightScale);
-    program.setUniform(_uniformCacheCommon.betaRayleigh, _rayleighScatteringCoeff);
-    program.setUniform(_uniformCacheCommon.mieHeightScale, _mieHeightScale);
-    program.setUniform(_uniformCacheCommon.betaMieExtinction, _mieExtinctionCoeff);
-    program.setUniform(_uniformCacheCommon.mieG, _miePhaseConstant);
-    program.setUniform(_uniformCacheCommon.sunRadiance, _sunRadianceIntensity);
-    program.setUniform(_uniformCacheCommon.ozoneLayerEnabled, _ozoneEnabled);
-    program.setUniform(_uniformCacheCommon.ozoneHeightScale, _ozoneHeightScale);
-    program.setUniform(_uniformCacheCommon.betaOzoneExtinction, _ozoneExtinctionCoeff);
-    program.setUniform(_uniformCacheCommon.rSamples, _rSamples);
-    program.setUniform(_uniformCacheCommon.muSamples, _muSamples);
-    program.setUniform(_uniformCacheCommon.muSSamples, _muSSamples);
-    program.setUniform(_uniformCacheCommon.nuSamples, _nuSamples);
+    program.setUniform(_uniformCache.cullAtmosphere, 0);
+    program.setUniform(_uniformCache.opacity, _opacity);
+    program.setUniform(_uniformCache.rPlanet, _atmospherePlanetRadius);
+    program.setUniform(_uniformCache.rAtmosphere, _atmosphereRadius);
+    program.setUniform(_uniformCache.groundRadianceEmission, _groundRadianceEmission);
+    program.setUniform(_uniformCache.rayleighHeightScale, _rayleighHeightScale);
+    program.setUniform(_uniformCache.betaRayleigh, _rayleighScatteringCoeff);
+    program.setUniform(_uniformCache.mieHeightScale, _mieHeightScale);
+    program.setUniform(_uniformCache.betaMieExtinction, _mieExtinctionCoeff);
+    program.setUniform(_uniformCache.mieG, _miePhaseConstant);
+    program.setUniform(_uniformCache.sunRadiance, _sunRadianceIntensity);
+    program.setUniform(_uniformCache.ozoneLayerEnabled, _ozoneEnabled);
+    program.setUniform(_uniformCache.ozoneHeightScale, _ozoneHeightScale);
+    program.setUniform(_uniformCache.betaOzoneExtinction, _ozoneExtinctionCoeff);
+    program.setUniform(_uniformCache.rSamples, _rSamples);
+    program.setUniform(_uniformCache.muSamples, _muSamples);
+    program.setUniform(_uniformCache.muSSamples, _muSSamples);
+    program.setUniform(_uniformCache.nuSamples, _nuSamples);
     // We expose the value as degrees, but the shader wants radians
-    program.setUniform(_uniformCacheCommon.sunAngularSize, glm::radians(_sunAngularSize));
+    program.setUniform(_uniformCache.sunAngularSize, glm::radians(_sunAngularSize));
 
     // Object Space
     const glm::dmat4 invModelMatrix = glm::inverse(_modelTransform);
-    const glm::dmat4 viewToWorld    = glm::inverse(data.camera.combinedViewMatrix());
-    const glm::dmat4 dInvProj       = glm::inverse(glm::dmat4(data.camera.projectionMatrix()));
-    const glm::dmat4 invWholePipeline = invModelMatrix * viewToWorld * dInvProj;
+    program.setUniform(_uniformCache.inverseModelTransformMatrix, invModelMatrix);
+    program.setUniform(_uniformCache.modelTransformMatrix, _modelTransform);
 
-    // Camera & sun in object space
+    const glm::dmat4 viewToWorld = glm::inverse(data.camera.combinedViewMatrix());
+
+    // Eye Space to World Space
+    program.setUniform(_uniformCache.viewToWorldMatrix, viewToWorld);
+
+    // Projection to Eye Space
+    const glm::dmat4 dInvProj = glm::inverse(glm::dmat4(data.camera.projectionMatrix()));
+
+    const glm::dmat4 invWholePipeline = invModelMatrix * viewToWorld * dInvProj;
+    program.setUniform(_uniformCache.projectionToModelTransformMatrix, invWholePipeline);
+
     const glm::dvec4 camPosObjCoords =
         invModelMatrix * glm::dvec4(data.camera.eyePosition(), 1.0);
+    program.setUniform(_uniformCache.camPosObj, glm::dvec3(camPosObjCoords));
 
+    // For the lighting we use the provided node, or the Sun
     SceneGraphNode* node =
         _lightSourceNode ? _lightSourceNode : sceneGraph()->sceneGraphNode("Sun");
     const glm::dvec3 sunPosWorld = node ? node->worldPosition() : glm::dvec3(0.0);
 
     const glm::dvec3 sunPosObj =
         _sunFollowingCameraEnabled ?
-        glm::dvec3(camPosObjCoords) :
-        glm::dvec3(invModelMatrix * glm::dvec4(sunPosWorld, 1.0));
+        camPosObjCoords :
+        invModelMatrix * glm::dvec4(sunPosWorld, 1.0);
 
-    // ---------------------------------------------------------------------------
-    // Transform & position uniforms — precision-path dependent
-    // ---------------------------------------------------------------------------
-    if (_gpuSupportsDouble) {
-        // Native double path: send dmat4 and dvec3 directly
-        program.setUniform(_uniformCacheDouble.inverseModelTransformMatrix, invModelMatrix);
-        program.setUniform(_uniformCacheDouble.modelTransformMatrix, _modelTransform);
-        program.setUniform(_uniformCacheDouble.viewToWorldMatrix, viewToWorld);
-        program.setUniform(_uniformCacheDouble.projectionToModelTransformMatrix,
-                           invWholePipeline);
-        program.setUniform(_uniformCacheDouble.camPosObj, glm::dvec3(camPosObjCoords));
-        program.setUniform(_uniformCacheDouble.sunDirectionObj,
-                           glm::normalize(sunPosObj));
-    }
-    else {
-        // Float-emulation path:
-        // 1. viewToObject split: maps view space directly to object space.
-        // Pre-cancels the 1.5e11 galactic coordinate on CPU in double precision,
-        // eliminating catastrophic cancellation and floating error in the shader.
-        const glm::dmat4 viewToObject = invModelMatrix * viewToWorld;
-        auto [vto_hi, vto_lo] = splitDmat4(viewToObject);
-        program.setUniform(_uniformCacheFloat.viewToObjectMatrix_hi, vto_hi);
-        program.setUniform(_uniformCacheFloat.viewToObjectMatrix_lo, vto_lo);
+    // Sun Position in Object Space
+    program.setUniform(_uniformCache.sunDirectionObj, glm::normalize(sunPosObj));
 
-        // 2. modelTransformMatrix split: maps object space to world space for shadows.
-        auto [mt_hi, mt_lo] = splitDmat4(_modelTransform);
-        program.setUniform(_uniformCacheFloat.modelTransformMatrix_hi, mt_hi);
-        program.setUniform(_uniformCacheFloat.modelTransformMatrix_lo, mt_lo);
-
-        // 3. rayDirectionMatrix: maps near-plane NDC coordinates (-1.0 z_clip) directly
-        // to viewing ray direction in object space. Completely avoids division by near-zero w.
-        glm::dmat4 rotViewToObject = viewToObject;
-        rotViewToObject[3] = glm::dvec4(0.0, 0.0, 0.0, 1.0);
-        const glm::mat4 rayDirMat = glm::mat4(rotViewToObject * dInvProj);
-        program.setUniform(_uniformCacheFloat.rayDirectionMatrix, rayDirMat);
-
-        // camPosObj: sent in METERS as (hi, lo) pair, matching double path units.
-        // Full Dekker/Veltkamp arithmetic handles arbitrary distances with ~48-bit precision.
-        const glm::dvec3 camPosM = glm::dvec3(camPosObjCoords);
-        const glm::vec3  cam_hi = glm::vec3(camPosM);
-        const glm::vec3  cam_lo = glm::vec3(camPosM - glm::dvec3(cam_hi));
-        program.setUniform(_uniformCacheFloat.camPosObj_hi, cam_hi);
-        program.setUniform(_uniformCacheFloat.camPosObj_lo, cam_lo);
-
-        // sunDirectionObj: unit vector — plain float is fine
-        program.setUniform(_uniformCacheFloat.sunDirectionObj,
-                           glm::vec3(glm::normalize(sunPosObj)));
-    }
-
-    // ---------------------------------------------------------------------------
     // Shadow calculations
-    // ---------------------------------------------------------------------------
     _shadowDataArrayCache.clear();
     for (ShadowConfiguration& shadowConf : _shadowConfArray) {
-        // All distances and lengths in world coordinates are in meters.
+        // All distances and lengths in world coordinates are in meters. We need to move
+        // this to view space
         double lt = 0.0;
         const glm::dvec3 sourcePos = SpiceManager::ref().targetPosition(
             shadowConf.source.first,
@@ -495,7 +405,7 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
             {},
             data.time.j2000Seconds(),
             lt
-        ) * KilometerToMeter;
+        )* KilometerToMeter;
 
         SceneGraphNode* sourceNode = sceneGraphNode(shadowConf.source.first);
         if (!sourceNode) {
@@ -514,22 +424,22 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
             return;
         }
 
-        const double sourceScale       = std::max(glm::compMax(sourceNode->scale()), 1.0);
-        const double casterScale       = std::max(glm::compMax(casterNode->scale()), 1.0);
+        const double sourceScale = std::max(glm::compMax(sourceNode->scale()), 1.0);
+        const double casterScale = std::max(glm::compMax(casterNode->scale()), 1.0);
         const double actualSourceRadius = shadowConf.source.second * sourceScale;
         const double actualCasterRadius = shadowConf.caster.second * casterScale;
         // First we determine if the caster is shadowing the current planet (all
         // calculations in World Coordinates)
         const glm::dvec3 planetCasterVec = casterPos - data.modelTransform.translation;
         const glm::dvec3 sourceCasterVec = casterPos - sourcePos;
-        const double scLength            = glm::length(sourceCasterVec);
+        const double scLength = glm::length(sourceCasterVec);
         const glm::dvec3 planetCasterProj =
             (glm::dot(planetCasterVec, sourceCasterVec) / (scLength * scLength)) *
             sourceCasterVec;
-        const double dTest   = glm::length(planetCasterVec - planetCasterProj);
-        const double xpTest  = actualCasterRadius * scLength /
+        const double dTest = glm::length(planetCasterVec - planetCasterProj);
+        const double xpTest = actualCasterRadius * scLength /
             (actualSourceRadius + actualCasterRadius);
-        const double rpTest  = actualCasterRadius *
+        const double rpTest = actualCasterRadius *
             (glm::length(planetCasterProj) + xpTest) / xpTest;
 
         const double casterDistSun = glm::length(casterPos - sunPosWorld);
@@ -569,46 +479,20 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
         program.setUniform(_uniformNameBuffer, sd.isShadowing);
 
         if (sd.isShadowing) {
-            if (_gpuSupportsDouble) {
-                // Native double path: send geometry in metres as double
-                std::strcpy(bf, "].xp\0");
-                program.setUniform(_uniformNameBuffer, sd.penumbra);
-                std::strcpy(bf, "].xu\0");
-                program.setUniform(_uniformNameBuffer, sd.umbra);
-                std::strcpy(bf, "].rc\0");
-                program.setUniform(_uniformNameBuffer, sd.radiusCaster);
-                std::strcpy(bf, "].sourceCasterVec\0");
-                program.setUniform(_uniformNameBuffer, sd.sourceCasterVec);
-                std::strcpy(bf, "].casterPositionVec\0");
-                program.setUniform(_uniformNameBuffer, sd.casterPositionVec);
-            }
-            else {
-                // Float-emulation path: send geometry in metres matching double path.
-                // casterPositionVec is split into (hi, lo) in metres (world space).
-                std::strcpy(bf, "].xp\0");
-                program.setUniform(_uniformNameBuffer,
-                                   static_cast<float>(sd.penumbra));
-                std::strcpy(bf, "].xu\0");
-                program.setUniform(_uniformNameBuffer,
-                                   static_cast<float>(sd.umbra));
-                std::strcpy(bf, "].rc\0");
-                program.setUniform(_uniformNameBuffer,
-                                   static_cast<float>(sd.radiusCaster));
-                std::strcpy(bf, "].sourceCasterVec\0");
-                program.setUniform(_uniformNameBuffer,
-                                   glm::vec3(sd.sourceCasterVec));
-
-                const glm::vec3 cpos_hi = glm::vec3(sd.casterPositionVec);
-                const glm::vec3 cpos_lo = glm::vec3(sd.casterPositionVec - glm::dvec3(cpos_hi));
-                std::strcpy(bf, "].casterPositionVec_hi\0");
-                program.setUniform(_uniformNameBuffer, cpos_hi);
-                std::strcpy(bf, "].casterPositionVec_lo\0");
-                program.setUniform(_uniformNameBuffer, cpos_lo);
-            }
+            std::strcpy(bf, "].xp\0");
+            program.setUniform(_uniformNameBuffer, sd.penumbra);
+            std::strcpy(bf, "].xu\0");
+            program.setUniform(_uniformNameBuffer, sd.umbra);
+            std::strcpy(bf, "].rc\0");
+            program.setUniform(_uniformNameBuffer, sd.radiusCaster);
+            std::strcpy(bf, "].sourceCasterVec\0");
+            program.setUniform(_uniformNameBuffer, sd.sourceCasterVec);
+            std::strcpy(bf, "].casterPositionVec\0");
+            program.setUniform(_uniformNameBuffer, sd.casterPositionVec);
         }
         counter++;
     }
-    program.setUniform(_uniformCacheCommon.hardShadows, _hardShadowsEnabled);
+    program.setUniform(_uniformCache.hardShadows, _hardShadowsEnabled);
 }
 
 void AtmosphereDeferredcaster::postRaycast(const RenderData&, const DeferredcastData&,
@@ -624,9 +508,6 @@ void AtmosphereDeferredcaster::postRaycast(const RenderData&, const Deferredcast
 }
 
 std::filesystem::path AtmosphereDeferredcaster::deferredcastFSPath() const {
-    if (!_gpuSupportsDouble) {
-        return absPath("${MODULE_ATMOSPHERE}/shaders/atmosphere_deferred_fs_float.glsl");
-    }
     return absPath("${MODULE_ATMOSPHERE}/shaders/atmosphere_deferred_fs.glsl");
 }
 
@@ -639,13 +520,7 @@ std::filesystem::path AtmosphereDeferredcaster::helperPath() const {
 }
 
 void AtmosphereDeferredcaster::initializeCachedVariables(opengl::ProgramObject& program) {
-    opengl::updateUniformLocations(program, _uniformCacheCommon);
-    if (_gpuSupportsDouble) {
-        opengl::updateUniformLocations(program, _uniformCacheDouble);
-    }
-    else {
-        opengl::updateUniformLocations(program, _uniformCacheFloat);
-    }
+    opengl::updateUniformLocations(program, _uniformCache);
 }
 
 void AtmosphereDeferredcaster::setModelTransform(glm::dmat4 transform) {
@@ -669,22 +544,22 @@ void AtmosphereDeferredcaster::setParameters(float atmosphereRadius, float plane
                                              bool sunFollowing, float sunAngularSize,
                                              SceneGraphNode* lightSourceNode)
 {
-    _atmosphereRadius        = atmosphereRadius;
-    _atmospherePlanetRadius  = planetRadius;
+    _atmosphereRadius = atmosphereRadius;
+    _atmospherePlanetRadius = planetRadius;
     _averageGroundReflectance = averageGroundReflectance;
-    _groundRadianceEmission  = groundRadianceEmission;
-    _rayleighHeightScale     = rayleighHeightScale;
-    _ozoneEnabled            = enableOzone;
-    _ozoneHeightScale        = ozoneHeightScale;
-    _mieHeightScale          = mieHeightScale;
-    _miePhaseConstant        = miePhaseConstant;
-    _sunRadianceIntensity    = sunRadiance;
+    _groundRadianceEmission = groundRadianceEmission;
+    _rayleighHeightScale = rayleighHeightScale;
+    _ozoneEnabled = enableOzone;
+    _ozoneHeightScale = ozoneHeightScale;
+    _mieHeightScale = mieHeightScale;
+    _miePhaseConstant = miePhaseConstant;
+    _sunRadianceIntensity = sunRadiance;
     _rayleighScatteringCoeff = std::move(rayScatteringCoefficients);
-    _ozoneExtinctionCoeff    = std::move(ozoneExtinctionCoefficients);
-    _mieScatteringCoeff      = std::move(mieScatteringCoefficients);
-    _mieExtinctionCoeff      = std::move(mieExtinctionCoefficients);
+    _ozoneExtinctionCoeff = std::move(ozoneExtinctionCoefficients);
+    _mieScatteringCoeff = std::move(mieScatteringCoefficients);
+    _mieExtinctionCoeff = std::move(mieExtinctionCoefficients);
     _sunFollowingCameraEnabled = sunFollowing;
-    _sunAngularSize          = sunAngularSize;
+    _sunAngularSize = sunAngularSize;
     // The light source may be nullptr which we interpret to mean a position of (0,0,0)
     _lightSourceNode = lightSourceNode;
 }
@@ -1286,8 +1161,8 @@ void AtmosphereDeferredcaster::step3DTexture(opengl::ProgramObject& prg, int lay
 {
     // See OpenGL redbook 8th Edition page 556 for Layered Rendering
     const float planet2 = _atmospherePlanetRadius * _atmospherePlanetRadius;
-    const float diff    = _atmosphereRadius * _atmosphereRadius - planet2;
-    const float ri      = static_cast<float>(layer) / static_cast<float>(_rSamples - 1);
+    const float diff = _atmosphereRadius * _atmosphereRadius - planet2;
+    const float ri = static_cast<float>(layer) / static_cast<float>(_rSamples - 1);
     float eps = 0.01f;
     if (layer > 0) {
         if (layer == (_rSamples - 1)) {
@@ -1297,11 +1172,11 @@ void AtmosphereDeferredcaster::step3DTexture(opengl::ProgramObject& prg, int lay
             eps = 0.f;
         }
     }
-    const float r     = std::sqrt(planet2 + ri * ri * diff) + eps;
+    const float r = std::sqrt(planet2 + ri * ri * diff) + eps;
     const float dminG = r - _atmospherePlanetRadius;
     const float dminT = _atmosphereRadius - r;
-    const float dh    = std::sqrt(r * r - planet2);
-    const float dH    = dh + std::sqrt(diff);
+    const float dh = std::sqrt(r * r - planet2);
+    const float dH = dh + std::sqrt(diff);
 
     prg.setUniform("r", r);
     prg.setUniform("dhdH", dminT, dH, dminG, dh);
