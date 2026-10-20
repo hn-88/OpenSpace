@@ -133,12 +133,15 @@ private:
         camPosObj, sunDirectionObj) _uniformCacheDouble;
 
     // Float-emulation uniforms (used when _gpuSupportsDouble == false)
-    // Each dmat4 is split into two mat4 (hi + lo); camPosObj into two vec3 (meters).
+    // viewToObjectMatrix: maps view space directly to object space (split into hi + lo)
+    // modelTransformMatrix: maps object space to world space for shadows (split into hi + lo)
+    // rayDirectionMatrix: maps near-plane NDC coordinates to ray direction in object space
+    // camPosObj: camera position in object space (meters) split into hi + lo
+    // sunDirectionObj: sun direction unit vector in object space
     UniformCache(
-        inverseModelTransformMatrix_hi, inverseModelTransformMatrix_lo,
+        viewToObjectMatrix_hi,          viewToObjectMatrix_lo,
         modelTransformMatrix_hi,        modelTransformMatrix_lo,
-        viewToWorldMatrix_hi,           viewToWorldMatrix_lo,
-        projectionToModelTransformMatrix_hi, projectionToModelTransformMatrix_lo,
+        rayDirectionMatrix,
         camPosObj_hi, camPosObj_lo,
         sunDirectionObj) _uniformCacheFloat;
 

@@ -439,27 +439,26 @@ void AtmosphereDeferredcaster::preRaycast(const RenderData& data, const Deferred
                            glm::normalize(sunPosObj));
     }
     else {
-        // Float-emulation path: split every dmat4 into (hi, lo) mat4 pair.
+        // Float-emulation path:
+        // 1. viewToObject split: maps view space directly to object space.
+        // Pre-cancels the 1.5e11 galactic coordinate on CPU in double precision,
+        // eliminating catastrophic cancellation and floating error in the shader.
+        const glm::dmat4 viewToObject = invModelMatrix * viewToWorld;
+        auto [vto_hi, vto_lo] = splitDmat4(viewToObject);
+        program.setUniform(_uniformCacheFloat.viewToObjectMatrix_hi, vto_hi);
+        program.setUniform(_uniformCacheFloat.viewToObjectMatrix_lo, vto_lo);
 
-        // invModelMatrix split
-        auto [im_hi, im_lo] = splitDmat4(invModelMatrix);
-        program.setUniform(_uniformCacheFloat.inverseModelTransformMatrix_hi, im_hi);
-        program.setUniform(_uniformCacheFloat.inverseModelTransformMatrix_lo, im_lo);
-
-        // modelTransformMatrix split
+        // 2. modelTransformMatrix split: maps object space to world space for shadows.
         auto [mt_hi, mt_lo] = splitDmat4(_modelTransform);
         program.setUniform(_uniformCacheFloat.modelTransformMatrix_hi, mt_hi);
         program.setUniform(_uniformCacheFloat.modelTransformMatrix_lo, mt_lo);
 
-        // viewToWorldMatrix split
-        auto [vtw_hi, vtw_lo] = splitDmat4(viewToWorld);
-        program.setUniform(_uniformCacheFloat.viewToWorldMatrix_hi, vtw_hi);
-        program.setUniform(_uniformCacheFloat.viewToWorldMatrix_lo, vtw_lo);
-
-        // projectionToModelTransformMatrix split
-        auto [pm_hi, pm_lo] = splitDmat4(invWholePipeline);
-        program.setUniform(_uniformCacheFloat.projectionToModelTransformMatrix_hi, pm_hi);
-        program.setUniform(_uniformCacheFloat.projectionToModelTransformMatrix_lo, pm_lo);
+        // 3. rayDirectionMatrix: maps near-plane NDC coordinates (-1.0 z_clip) directly
+        // to viewing ray direction in object space. Completely avoids division by near-zero w.
+        glm::dmat4 rotViewToObject = viewToObject;
+        rotViewToObject[3] = glm::dvec4(0.0, 0.0, 0.0, 1.0);
+        const glm::mat4 rayDirMat = glm::mat4(rotViewToObject * dInvProj);
+        program.setUniform(_uniformCacheFloat.rayDirectionMatrix, rayDirMat);
 
         // camPosObj: sent in METERS as (hi, lo) pair, matching double path units.
         // Full Dekker/Veltkamp arithmetic handles arbitrary distances with ~48-bit precision.

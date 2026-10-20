@@ -102,16 +102,13 @@ uniform sampler2D mainNormalTexture;
 uniform sampler2D mainColorTexture;
 
 // ---------------------------------------------------------------------------
-// Transform matrix uniforms — Dekker/Veltkamp (hi, lo) pairs of mat4.
+// Transform matrix uniforms — Float emulation path.
 // ---------------------------------------------------------------------------
-uniform mat4  inverseModelTransformMatrix_hi;
-uniform mat4  inverseModelTransformMatrix_lo;
+uniform mat4  viewToObjectMatrix_hi;
+uniform mat4  viewToObjectMatrix_lo;
 uniform mat4  modelTransformMatrix_hi;
 uniform mat4  modelTransformMatrix_lo;
-uniform mat4  viewToWorldMatrix_hi;
-uniform mat4  viewToWorldMatrix_lo;
-uniform mat4  projectionToModelTransformMatrix_hi;
-uniform mat4  projectionToModelTransformMatrix_lo;
+uniform mat4  rayDirectionMatrix;
 
 uniform vec4  viewport;
 uniform vec2  resolution;
@@ -272,28 +269,14 @@ bool atmosphereIntersection(Ray ray, out float offset, out float maxLength) {
 }
 
 /*
- * Calculates Intersection Ray by walking through graphics pipeline transformations
- * in reverse using full-precision Dekker/Veltkamp arithmetic.
+ * Calculates viewing ray in object space directly from NDC coordinates.
+ * Using the near plane (-1.0 z_clip), w is guaranteed to be non-zero (~1-2),
+ * completely avoiding division by near-zero w, underflow, or NaN.
  */
 Ray calculateRayRenderableGlobe(vec2 st) {
-  vec2  interpolatedNDCPos = (st - 0.5) * 2.0;
-  vec4  clipCoords = vec4(interpolatedNDCPos, 1.0, 1.0);
-
-  // Clip to Object Coords (in meters) using exact df64 matrix multiplication
-  df64_vec4 objectCoords = df64_mat4_mul_vec4(
-    projectionToModelTransformMatrix_hi,
-    projectionToModelTransformMatrix_lo,
-    clipCoords
-  );
-
-  // Perspective divide in df64: objectCoords.xyz /= objectCoords.w
-  df64_vec3 objPos = df64_project(objectCoords);
-
-  // Building Ray in object space (km)
-  // ray.direction = normalize(objectCoords.xyz - camPosObj)
-  df64_vec3 camPos = df64_vec3(camPosObj_hi, camPosObj_lo);
-  df64_vec3 dir_df = df64_vec3_sub(objPos, camPos);
-  vec3 dir = dir_df.hi + dir_df.lo;
+  vec2 interpolatedNDCPos = (st - 0.5) * 2.0;
+  vec4 clipCoordsNear = vec4(interpolatedNDCPos, -1.0, 1.0);
+  vec3 dir = (rayDirectionMatrix * clipCoordsNear).xyz;
 
   Ray ray;
   ray.origin    = (camPosObj_hi + camPosObj_lo) * 0.001; // meters -> km
@@ -473,46 +456,74 @@ void main() {
     return;
   }
 
-  // Normal from view space to object space using df64 matrix operations
+  // G-Buffer sampling
   vec4 normalViewSpaceAndWaterReflectance = texture(mainNormalTexture, st);
-  vec4 normalViewSpace = vec4(normalViewSpaceAndWaterReflectance.xyz, 0.0);
-  df64_vec4 normWorld = df64_mat4_mul_vec4(viewToWorldMatrix_hi, viewToWorldMatrix_lo, normalViewSpace);
-  df64_vec4 normObj   = df64_mat4_mul_df64_vec4(inverseModelTransformMatrix_hi, inverseModelTransformMatrix_lo, normWorld);
-  vec4 normal;
-  normal.xyz = normalize(normObj.hi.xyz + normObj.lo.xyz);
-  normal.w   = normalViewSpaceAndWaterReflectance.w;
-
-  // OS Eye to World coords (meters)
   vec4 position = texture(mainPositionTexture, st);
-  df64_vec4 positionWorldCoords = df64_mat4_mul_vec4(viewToWorldMatrix_hi, viewToWorldMatrix_lo, position);
 
-  // World to Object coords (meters)
-  df64_vec4 positionObjectsCoords_m = df64_mat4_mul_df64_vec4(
-    inverseModelTransformMatrix_hi,
-    inverseModelTransformMatrix_lo,
-    positionWorldCoords
-  );
+  float pixelDepth;
+  vec3  positionObjectsCoords;
+  vec4  normal;
+  float daylightFactor;
+  df64_vec4 posObj_m;
 
-  // Distance of the pixel in the gBuffer to the observer (meters)
-  df64_vec3 camPos = df64_vec3(camPosObj_hi, camPosObj_lo);
-  df64_vec3 depthDiff = df64_vec3_sub(camPos, df64_vec3(positionObjectsCoords_m.hi.xyz, positionObjectsCoords_m.lo.xyz));
-  float pixelDepth = df64_vec3_length(depthDiff);
+  // Background / deep space check:
+  // In OpenSpace, PosBufferClearVal = 1e32. If position is clear value or w == 0,
+  // this fragment is empty space (no terrain / geometry).
+  const float SpaceThreshold = 1e20;
+  bool isBackground = (abs(position.x) >= SpaceThreshold || abs(position.y) >= SpaceThreshold ||
+                       abs(position.z) >= SpaceThreshold || position.w == 0.0);
 
-  float dC = length(camPosObj_hi + camPosObj_lo);
-  const float X1 = 1e8;
-  if (dC > X1) {
-    pixelDepth += 1000.0;
-    const float Alpha = 1000.0;
-    const float Beta  = 1000000.0;
-    const float X2    = 1e9;
-    const float VarA  = (Beta - Alpha) / (X2 - X1);
-    const float VarB  = (Alpha - VarA * X1);
-    pixelDepth += VarA * dC + VarB;
+  // Following paper nomenclature
+  float t = offset;
+  vec3  x = ray.origin + t * ray.direction;
+  float tF = float(maxLength - t);
+
+  if (isBackground) {
+    // Pure atmosphere / sky pixel: ray continues through atmosphere without hitting ground.
+    pixelDepth            = 1e20;
+    positionObjectsCoords = x + tF * ray.direction;
+    normal                = vec4(0.0);
+    daylightFactor        = 1.0;
   }
+  else {
+    // Normal from view space to object space:
+    // normal is a direction vector (w = 0), so rotation from viewToObject applies directly.
+    vec3 normObj = mat3(viewToObjectMatrix_hi) * normalViewSpaceAndWaterReflectance.xyz;
+    normal.xyz   = normalize(normObj);
+    normal.w     = normalViewSpaceAndWaterReflectance.w;
 
-  // All calculations are done in KM:
-  pixelDepth *= 0.001;
-  vec3 positionObjectsCoords = (positionObjectsCoords_m.hi.xyz + positionObjectsCoords_m.lo.xyz) * 0.001;
+    // View to Object coordinates in meters using df64.
+    // viewToObject pre-cancels the 1.5e11 galactic coordinate on CPU in double precision.
+    posObj_m = df64_mat4_mul_vec4(
+      viewToObjectMatrix_hi,
+      viewToObjectMatrix_lo,
+      position
+    );
+
+    // Camera is at origin (0, 0, 0) in view space, so the exact distance from camera to
+    // the surface fragment in meters is length(position.xyz).
+    pixelDepth = length(position.xyz);
+
+    float dC = length(camPosObj_hi + camPosObj_lo);
+    const float X1 = 1e8;
+    if (dC > X1) {
+      pixelDepth += 1000.0;
+      const float Alpha = 1000.0;
+      const float Beta  = 1000000.0;
+      const float X2    = 1e9;
+      const float VarA  = (Beta - Alpha) / (X2 - X1);
+      const float VarB  = (Alpha - VarA * X1);
+      pixelDepth += VarA * dC + VarB;
+    }
+
+    // Convert to kilometers:
+    pixelDepth *= 0.001;
+    positionObjectsCoords = (posObj_m.hi.xyz + posObj_m.lo.xyz) * 0.001;
+
+    // Daylight factor: dot(normal_world, sunDir_world) == dot(normal_obj, sunDir_obj)
+    // because rotation preserves dot products.
+    daylightFactor = clamp(dot(normal.xyz, sunDirectionObj) * 4.0 + 0.5, 0.0, 1.0);
+  }
 
   if (pixelDepth < offset) {
     // ATM Occluded - Something in front of ATM
@@ -520,34 +531,18 @@ void main() {
     return;
   }
 
-  // Following paper nomenclature
-  float t = offset;
-  vec3  x = ray.origin + t * ray.direction;
-
   df64_vec4 onATMPos_m = df64_mat4_mul_vec4(
     modelTransformMatrix_hi,
     modelTransformMatrix_lo,
     vec4(x * 1000.0, 1.0)
   );
-  df64_vec4 sunDirWorld_m = df64_mat4_mul_vec4(
-    modelTransformMatrix_hi,
-    modelTransformMatrix_lo,
-    vec4(sunDirectionObj, 0.0)
-  );
-  vec3 sunDirectionWorld = normalize(sunDirWorld_m.hi.xyz + sunDirWorld_m.lo.xyz);
 
   float r  = length(x);
   vec3  v  = vec3(ray.direction);
   float mu = 0.0;
   vec3  s  = vec3(sunDirectionObj);
-  float tF = float(maxLength - t);
 
   pixelDepth -= offset;
-
-  // normalWorldSpace for daylightFactor
-  vec3 normalWorldSpace = normalize(normWorld.hi.xyz + normWorld.lo.xyz);
-  float daylightFactor = clamp(
-    dot(normalWorldSpace, sunDirectionWorld) * 4.0 + 0.5, 0.0, 1.0);
 
   // Eclipse shadow calculation in world meters using df64
   vec2 eclipseShadowATM = calcShadow(
@@ -568,6 +563,11 @@ void main() {
 
   vec3 atmColor = vec3(0.0);
   if (groundHit) {
+    df64_vec4 positionWorldCoords = df64_mat4_mul_df64_vec4(
+      modelTransformMatrix_hi,
+      modelTransformMatrix_lo,
+      posObj_m
+    );
     vec2 eclipseShadowPlanet = calcShadow(
       shadowDataArray,
       df64_vec3(positionWorldCoords.hi.xyz, positionWorldCoords.lo.xyz),

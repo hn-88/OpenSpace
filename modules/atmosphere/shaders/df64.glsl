@@ -69,13 +69,11 @@ vec2 df64_split(float a) {
     return vec2(hi, lo);
 }
 
-// Dekker product: exact product of two floats as (product, roundingError).
-// Satisfies: a * b == result.x + result.y exactly.
+// Exact product of two floats as (product, roundingError) using hardware FMA.
+// Satisfies: a * b == result.x + result.y exactly, with zero intermediate overflow risk.
 vec2 df64_twoProd(float a, float b) {
-    float p  = a * b;
-    vec2  as = df64_split(a);
-    vec2  bs = df64_split(b);
-    float e  = ((as.x * bs.x - p) + as.x * bs.y + as.y * bs.x) + as.y * bs.y;
+    float p = a * b;
+    float e = fma(a, b, -p);
     return vec2(p, e);
 }
 
@@ -109,6 +107,7 @@ vec2 df64_mul_float(vec2 a, float b) {
 
 // Divide two df64 values: a / b
 vec2 df64_div(vec2 a, vec2 b) {
+    if (b.x == 0.0) return vec2(0.0);
     float q1 = a.x / b.x;
     vec2  r  = df64_sub(a, df64_mul_float(b, q1));
     float q2 = r.x / b.x;
