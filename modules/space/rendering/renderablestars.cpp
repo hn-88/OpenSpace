@@ -53,17 +53,32 @@ namespace {
 
     constexpr std::string_view _loggerCat = "RenderableStars";
 
-    bool isNoGpuDoubleEnvSet() {
+    struct EnvCheckResult {
+        bool enabled = false;
+        std::string varName;
+        std::string value;
+    };
+
+    EnvCheckResult checkNoGpuDoubleEnv() {
         for (const char* varName : { "NO_GPU_DOUBLE", "NO_DOUBLE", "OPENSPACE_NO_GPU_DOUBLE" }) {
             const char* val = std::getenv(varName);
-            if (val && std::string_view(val) != "0" &&
-                std::string_view(val) != "false" &&
-                std::string_view(val) != "FALSE")
-            {
-                return true;
+            if (val) {
+                std::string_view sv(val);
+                while (!sv.empty() && (sv.front() == ' ' || sv.front() == '\t')) {
+                    sv.remove_prefix(1);
+                }
+                while (!sv.empty() && (sv.back() == ' ' || sv.back() == '\t' || sv.back() == '\r' || sv.back() == '\n')) {
+                    sv.remove_suffix(1);
+                }
+                if (!sv.empty() && sv != "0" && sv != "false" && sv != "FALSE" && sv != "False") {
+                    return { true, varName, std::string(sv) };
+                }
+                else {
+                    return { false, varName, std::string(sv) };
+                }
             }
         }
-        return false;
+        return { false, "", "" };
     }
 
     enum SizeComposition {
@@ -726,6 +741,8 @@ RenderableStars::RenderableStars(const Dictionary& dictionary)
     _staticFilterValue = p.staticFilter;
     _staticFilterReplacementValue =
         p.staticFilterReplacement.value_or(_staticFilterReplacementValue);
+
+    _gpuSupportsDouble = !checkNoGpuDoubleEnv().enabled;
 }
 
 std::pair<glm::mat4, glm::mat4> RenderableStars::splitDmat4(const glm::dmat4& m) {
@@ -744,9 +761,21 @@ std::pair<glm::mat4, glm::mat4> RenderableStars::splitDmat4(const glm::dmat4& m)
 }
 
 void RenderableStars::initializeGL() {
-    _gpuSupportsDouble = !isNoGpuDoubleEnvSet();
+    const EnvCheckResult env = checkNoGpuDoubleEnv();
+    _gpuSupportsDouble = !env.enabled;
 
     if (_gpuSupportsDouble) {
+        if (!env.varName.empty()) {
+            LINFO(std::format(
+                "Environment variable {}='{}' detected (disabled). "
+                "RenderableStars will use original double-precision shaders (star_vs.glsl, star_gs.glsl).",
+                env.varName, env.value
+            ));
+        }
+        else {
+            LINFO("NO_GPU_DOUBLE environment variable is not set. "
+                  "RenderableStars will use original double-precision shaders (star_vs.glsl, star_gs.glsl).");
+        }
         _program = global::renderEngine->buildRenderProgram(
             "Star",
             absPath("${MODULE_SPACE}/shaders/star_vs.glsl"),
@@ -755,6 +784,11 @@ void RenderableStars::initializeGL() {
         );
     }
     else {
+        LINFO(std::format(
+            "Environment variable {}='{}' detected. "
+            "RenderableStars will use float workaround shaders (star_vs_float.glsl, star_gs_float.glsl).",
+            env.varName, env.value
+        ));
         _program = global::renderEngine->buildRenderProgram(
             "Star",
             absPath("${MODULE_SPACE}/shaders/star_vs_float.glsl"),

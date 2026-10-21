@@ -500,9 +500,13 @@ void main() {
       position
     );
 
-    // Camera is at origin (0, 0, 0) in view space, so the exact distance from camera to
-    // the surface fragment in meters is length(position.xyz).
-    pixelDepth = length(position.xyz);
+    // Compute distance from camera to surface in planet object space (meters)
+    // using df64 subtraction to maintain full precision and cancel any camera scaling.
+    df64_vec3 camPos_m  = df64_vec3(camPosObj_hi, camPosObj_lo);
+    df64_vec3 fragPos_m = df64_vec3(posObj_m.hi.xyz, posObj_m.lo.xyz);
+    df64_vec3 diff_m    = df64_vec3_sub(camPos_m, fragPos_m);
+    vec3 diff           = diff_m.hi + diff_m.lo;
+    pixelDepth          = length(diff);
 
     float dC = length(camPosObj_hi + camPosObj_lo);
     const float X1 = 1e8;
@@ -525,7 +529,12 @@ void main() {
     daylightFactor = clamp(dot(normal.xyz, sunDirectionObj) * 4.0 + 0.5, 0.0, 1.0);
   }
 
-  if (pixelDepth < offset) {
+  // Occlusion check: only external objects (e.g. spacecraft, moon) located outside
+  // the atmosphere (rFrag > rAtmosphere) and between the camera and the atmospheric shell
+  // can occlude the atmosphere. Terrain on or inside the atmosphere
+  // (rFrag <= rAtmosphere) is immersed within the atmosphere and must never be culled.
+  float rFrag = length(positionObjectsCoords);
+  if (!isBackground && rFrag > rAtmosphere && pixelDepth < offset) {
     // ATM Occluded - Something in front of ATM
     out_color = color;
     return;
