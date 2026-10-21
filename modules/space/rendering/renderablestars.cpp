@@ -951,6 +951,8 @@ void RenderableStars::render(const RenderData& data, RendererTasks&) {
 
         const glm::mat4 projectionMatrix = data.camera.projectionMatrix();
         _program->setUniform(_uniformCacheFloat.projectionMatrix, projectionMatrix);
+
+        _program->setUniform(_uniformCacheFloat.viewScaling, data.camera.scaling());
     }
 
     _program->setUniform(_uniformCacheCommon.useProperMotion, _useProperMotion);

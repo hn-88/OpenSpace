@@ -73,6 +73,9 @@ uniform mat4 modelViewMatrix_lo;
 // Standard projection matrix
 uniform mat4 projectionMatrix;
 
+// Camera view scaling factor (Camera::_scaling in combinedViewMatrix)
+uniform float viewScaling;
+
 const float Parsec = 3.08567756e16;
 
 // FRAGILE
@@ -145,7 +148,10 @@ void main() {
   out_data.speed = in_data[0].speed;
   out_data.otherData = in_data[0].otherData;
 
-  float distanceToStar = length(p_view);
+  // In OpenSpace, Camera::combinedViewMatrix() scales coordinates by viewScaling (Camera::_scaling).
+  // Thus, length(p_view) is distance_in_meters * viewScaling.
+  // Dividing by viewScaling restores the true physical distance in meters.
+  float distanceToStar = length(p_view) / max(viewScaling, 1e-30);
   float scaleMultiply = 1.0;
 
   if (sizeComposition == SizeCompositionOptionLumSizeDistanceModulus) {
@@ -178,8 +184,14 @@ void main() {
   float lenRight = length(right);
   vec3 newRight = lenRight > 1e-4 ? right / lenRight : vec3(1.0, 0.0, 0.0);
   vec3 newUp = cross(normal, newRight);
-  vec3 scaledRight = scaleMultiply * newRight;
-  vec3 scaledUp = scaleMultiply * newUp;
+  // In view space, coordinates are scaled by viewScaling.
+  // Multiply scaleMultiply (which is in physical meters) by viewScaling so that
+  // the billboard displacement matches the coordinate scale of p_view.
+  // When projected to NDC, dividing by w (which is also proportional to viewScaling)
+  // cancels viewScaling completely, preserving exact screen-space size regardless of zoom!
+  float scaleView = scaleMultiply * viewScaling;
+  vec3 scaledRight = scaleView * newRight;
+  vec3 scaledUp    = scaleView * newUp;
 
   // Project 4 billboard corners to clip space.
   // Using linear distributivity P * (p_view + delta) = P * p_view + P * delta

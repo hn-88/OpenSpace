@@ -146,7 +146,7 @@ private:
 
     // Float-emulation uniforms (used when _gpuSupportsDouble == false)
     UniformCache(
-        modelViewMatrix_hi, modelViewMatrix_lo, projectionMatrix
+        modelViewMatrix_hi, modelViewMatrix_lo, projectionMatrix, viewScaling
     ) _uniformCacheFloat;
 
     bool _speckFileIsDirty = true;
