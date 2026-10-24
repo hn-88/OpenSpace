@@ -35,6 +35,7 @@
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/scalar/uintproperty.h>
 #include <openspace/properties/vector/vec3property.h>
+#include <openspace/util/nogpudouble.h>
 #include <limits>
 
 namespace openspace {
@@ -141,15 +142,27 @@ private:
     GLuint _vertexArray = 0;
     GLuint _vertexBuffer = 0;
 
+    bool _gpuSupportsDouble = true;
+
     /// Line cache
     UniformCache(modelViewTransform, projectionTransform, trailFadeExponent,
         colorFadeCutoffValue, inGameTime, color, opacity) _uniformTrailCache;
+
+    UniformCache(modelViewTransform_hi, modelViewTransform_lo, projectionTransform,
+        trailFadeExponent, colorFadeCutoffValue, inGameTime, color, opacity)
+        _uniformTrailCacheFloat;
 
     /// Point cache
     UniformCache(modelTransform, viewTransform, projectionTransform, renderOption,
         cameraViewDirectionUp, cameraViewDirectionRight, cameraPositionWorld,
         cameraUpWorld, inGameTime, color, pointSizeExponent, enableMaxSize, maxSize,
         enableOutline, outlineColor, outlineWeight, opacity) _uniformPointCache;
+
+    UniformCache(modelTransform_hi, modelTransform_lo, viewTransform_hi, viewTransform_lo,
+        projectionTransform, renderOption, cameraViewDirectionUp, cameraViewDirectionRight,
+        cameraPositionWorld_hi, cameraPositionWorld_lo, cameraUpWorld, inGameTime, color,
+        pointSizeExponent, enableMaxSize, maxSize, enableOutline, outlineColor,
+        outlineWeight, opacity) _uniformPointCacheFloat;
 };
 
 } // namespace openspace

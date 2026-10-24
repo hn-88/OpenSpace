@@ -33,6 +33,7 @@
 #include <openspace/properties/scalar/boolproperty.h>
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/vector/vec3property.h>
+#include <openspace/util/nogpudouble.h>
 
 namespace openspace {
 
@@ -62,6 +63,7 @@ private:
     void render(const RenderData& data, RendererTasks& rendererTask) override;
 
     opengl::ProgramObject* _program = nullptr;
+    bool _gpuSupportsDouble = true;
     GLuint _vao = 0;
     GLuint _vbo = 0;
 

@@ -24,6 +24,8 @@
 
 #include <modules/space/rendering/renderabletravelspeed.h>
 
+#include <openspace/util/nogpudouble.h>
+
 #include <modules/base/basemodule.h>
 #include <openspace/documentation/documentation.h>
 #include <openspace/engine/globals.h>
@@ -251,16 +253,38 @@ void RenderableTravelSpeed::initialize() {
 }
 
 void RenderableTravelSpeed::initializeGL() {
-    _shaderProgram = BaseModule::ProgramObjectManager.request(
-        "Travelspeed",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-            return global::renderEngine->buildRenderProgram(
-                "Travelspeed",
-                absPath("${MODULE_SPACE}/shaders/travelspeed_vs.glsl"),
-                absPath("${MODULE_SPACE}/shaders/travelspeed_fs.glsl")
-            );
-        }
-    );
+    const EnvCheckResult env = checkNoGpuDoubleEnv();
+    const bool gpuSupportsDouble = !env.enabled;
+
+    if (gpuSupportsDouble) {
+        LINFO("NO_GPU_DOUBLE environment variable is not set. RenderableTravelSpeed will use original double-precision shaders (travelspeed_vs.glsl).");
+        _shaderProgram = BaseModule::ProgramObjectManager.request(
+            "Travelspeed",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "Travelspeed",
+                    absPath("${MODULE_SPACE}/shaders/travelspeed_vs.glsl"),
+                    absPath("${MODULE_SPACE}/shaders/travelspeed_fs.glsl")
+                );
+            }
+        );
+    }
+    else {
+        LINFO(std::format(
+            "Environment variable {}='{}' detected. RenderableTravelSpeed will use float workaround shaders (travelspeed_vs_float.glsl).",
+            env.varName, env.value
+        ));
+        _shaderProgram = BaseModule::ProgramObjectManager.request(
+            "TravelspeedFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "TravelspeedFloat",
+                    absPath("${MODULE_SPACE}/shaders/travelspeed_vs_float.glsl"),
+                    absPath("${MODULE_SPACE}/shaders/travelspeed_fs.glsl")
+                );
+            }
+        );
+    }
 
     glCreateBuffers(1, &_vbo);
     glNamedBufferStorage(_vbo, sizeof(VertexPositions), nullptr, GL_DYNAMIC_STORAGE_BIT);
@@ -276,8 +300,9 @@ void RenderableTravelSpeed::initializeGL() {
 }
 
 void RenderableTravelSpeed::deinitializeGL() {
+    const std::string name = isNoGpuDoubleSet() ? "TravelspeedFloat" : "Travelspeed";
     BaseModule::ProgramObjectManager.release(
-        "Travelspeed",
+        name,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }

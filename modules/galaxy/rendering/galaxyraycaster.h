@@ -28,6 +28,7 @@
 #include <openspace/rendering/volumeraycaster.h>
 
 #include <openspace/util/boxgeometry.h>
+#include <openspace/util/nogpudouble.h>
 #include <memory>
 
 namespace openspace {
@@ -66,6 +67,7 @@ public:
 private:
     glm::dmat4 modelViewTransform(const RenderData& data);
 
+    bool _gpuSupportsDouble = true;
     BoxGeometry _boundingBox;
     float _stepSize = 0.f;
     glm::mat4 _modelTransform = glm::mat4(1.f);

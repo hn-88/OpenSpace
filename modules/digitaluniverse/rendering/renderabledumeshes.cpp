@@ -271,18 +271,42 @@ void RenderableDUMeshes::initialize() {
 }
 
 void RenderableDUMeshes::initializeGL() {
-    _program = DigitalUniverseModule::ProgramObjectManager.request(
-        "RenderableDUMeshes",
-        []() {
-            return global::renderEngine->buildRenderProgram(
-                "RenderableDUMeshes",
-                absPath("${MODULE_DIGITALUNIVERSE}/shaders/dumesh_vs.glsl"),
-                absPath("${MODULE_DIGITALUNIVERSE}/shaders/dumesh_fs.glsl")
-            );
-        }
-    );
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float DUMesh shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
 
-    opengl::updateUniformLocations(*_program, _uniformCache);
+    if (_gpuSupportsDouble) {
+        _program = DigitalUniverseModule::ProgramObjectManager.request(
+            "RenderableDUMeshes",
+            []() {
+                return global::renderEngine->buildRenderProgram(
+                    "RenderableDUMeshes",
+                    absPath("${MODULE_DIGITALUNIVERSE}/shaders/dumesh_vs.glsl"),
+                    absPath("${MODULE_DIGITALUNIVERSE}/shaders/dumesh_fs.glsl")
+                );
+            }
+        );
+        opengl::updateUniformLocations(*_program, _uniformCache);
+    }
+    else {
+        _program = DigitalUniverseModule::ProgramObjectManager.request(
+            "RenderableDUMeshesFloat",
+            []() {
+                return global::renderEngine->buildRenderProgram(
+                    "RenderableDUMeshesFloat",
+                    absPath("${MODULE_DIGITALUNIVERSE}/shaders/dumesh_vs_float.glsl"),
+                    absPath("${MODULE_DIGITALUNIVERSE}/shaders/dumesh_fs.glsl")
+                );
+            }
+        );
+        opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+    }
 
     createMeshes();
 
@@ -306,7 +330,7 @@ void RenderableDUMeshes::deinitializeGL() {
     }
 
     DigitalUniverseModule::ProgramObjectManager.release(
-        "RenderableDUMeshes",
+        _gpuSupportsDouble ? "RenderableDUMeshes" : "RenderableDUMeshesFloat",
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
@@ -324,12 +348,27 @@ void RenderableDUMeshes::renderMeshes(const RenderData&,
 
     _program->activate();
 
-    _program->setUniform(_uniformCache.modelViewTransform, modelViewMatrix);
-    _program->setUniform(_uniformCache.projectionTransform, projectionMatrix);
-    _program->setUniform(_uniformCache.alphaValue, opacity());
+    if (_gpuSupportsDouble) {
+        _program->setUniform(_uniformCache.modelViewTransform, modelViewMatrix);
+        _program->setUniform(_uniformCache.projectionTransform, projectionMatrix);
+        _program->setUniform(_uniformCache.alphaValue, opacity());
+    }
+    else {
+        const auto [mvHi, mvLo] = splitDmat4(modelViewMatrix);
+        _program->setUniform(_uniformCacheFloat.modelViewTransform_hi, mvHi);
+        _program->setUniform(_uniformCacheFloat.modelViewTransform_lo, mvLo);
+        _program->setUniform(
+            _uniformCacheFloat.projectionTransform,
+            glm::mat4(projectionMatrix)
+        );
+        _program->setUniform(_uniformCacheFloat.alphaValue, opacity());
+    }
+
+    const auto colorUniform = _gpuSupportsDouble ?
+        _uniformCache.color : _uniformCacheFloat.color;
 
     for (const std::pair<const int, RenderingMesh>& pair : _renderingMeshesMap) {
-        _program->setUniform(_uniformCache.color, _meshColorMap[pair.second.colorIndex]);
+        _program->setUniform(colorUniform, _meshColorMap[pair.second.colorIndex]);
         for (size_t i = 0; i < pair.second.vaoArray.size(); i++) {
             glBindVertexArray(pair.second.vaoArray[i]);
             switch (pair.second.style) {

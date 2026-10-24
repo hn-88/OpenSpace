@@ -444,17 +444,42 @@ void RenderableGalaxy::initializeGL() {
         return;
     }
 
-    _pointsProgram = global::renderEngine->buildRenderProgram(
-        "Galaxy points",
-        absPath("${MODULE_GALAXY}/shaders/points_vs.glsl"),
-        absPath("${MODULE_GALAXY}/shaders/points_fs.glsl")
-    );
-    _billboardsProgram = global::renderEngine->buildRenderProgram(
-        "Galaxy billboard",
-        absPath("${MODULE_GALAXY}/shaders/billboard_vs.glsl"),
-        absPath("${MODULE_GALAXY}/shaders/billboard_fs.glsl"),
-        absPath("${MODULE_GALAXY}/shaders/billboard_gs.glsl")
-    );
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Galaxy shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
+    if (_gpuSupportsDouble) {
+        _pointsProgram = global::renderEngine->buildRenderProgram(
+            "Galaxy points",
+            absPath("${MODULE_GALAXY}/shaders/points_vs.glsl"),
+            absPath("${MODULE_GALAXY}/shaders/points_fs.glsl")
+        );
+        _billboardsProgram = global::renderEngine->buildRenderProgram(
+            "Galaxy billboard",
+            absPath("${MODULE_GALAXY}/shaders/billboard_vs.glsl"),
+            absPath("${MODULE_GALAXY}/shaders/billboard_fs.glsl"),
+            absPath("${MODULE_GALAXY}/shaders/billboard_gs.glsl")
+        );
+    }
+    else {
+        _pointsProgram = global::renderEngine->buildRenderProgram(
+            "Galaxy points float",
+            absPath("${MODULE_GALAXY}/shaders/points_vs_float.glsl"),
+            absPath("${MODULE_GALAXY}/shaders/points_fs.glsl")
+        );
+        _billboardsProgram = global::renderEngine->buildRenderProgram(
+            "Galaxy billboard float",
+            absPath("${MODULE_GALAXY}/shaders/billboard_vs.glsl"),
+            absPath("${MODULE_GALAXY}/shaders/billboard_fs.glsl"),
+            absPath("${MODULE_GALAXY}/shaders/billboard_gs_float.glsl")
+        );
+    }
 
     if (!_pointSpreadFunctionTexturePath.empty()) {
         _pointSpreadFunctionTexture = io::texture::loadTexture(
@@ -472,8 +497,14 @@ void RenderableGalaxy::initializeGL() {
         );
     }
 
-    opengl::updateUniformLocations(*_pointsProgram, _uniformCachePoints);
-    opengl::updateUniformLocations(*_billboardsProgram, _uniformCacheBillboards);
+    if (_gpuSupportsDouble) {
+        opengl::updateUniformLocations(*_pointsProgram, _uniformCachePoints);
+        opengl::updateUniformLocations(*_billboardsProgram, _uniformCacheBillboards);
+    }
+    else {
+        opengl::updateUniformLocations(*_pointsProgram, _uniformCachePointsFloat);
+        opengl::updateUniformLocations(*_billboardsProgram, _uniformCacheBillboardsFloat);
+    }
 
     glCreateBuffers(1, &_positionVbo);
     glNamedBufferStorage(
@@ -636,21 +667,44 @@ void RenderableGalaxy::renderPoints(const RenderData& data) {
     const glm::dmat4 cameraViewProjectionMatrix =
         glm::dmat4(data.camera.projectionMatrix()) * data.camera.combinedViewMatrix();
 
-    _pointsProgram->setUniform(_uniformCachePoints.modelMatrix, modelTransform);
-    _pointsProgram->setUniform(
-        _uniformCachePoints.viewProjectionMatrix,
-        cameraViewProjectionMatrix
-    );
-
     const glm::dvec3 eyePosition = glm::dvec3(
         glm::inverse(data.camera.combinedViewMatrix()) *
         glm::dvec4(0.0, 0.0, 0.0, 1.0)
     );
-    _pointsProgram->setUniform(_uniformCachePoints.eyePosition, eyePosition);
-    _pointsProgram->setUniform(
-        _uniformCachePoints.opacityCoefficient,
-        _opacityCoefficient
-    );
+
+    if (_gpuSupportsDouble) {
+        _pointsProgram->setUniform(_uniformCachePoints.modelMatrix, modelTransform);
+        _pointsProgram->setUniform(
+            _uniformCachePoints.viewProjectionMatrix,
+            cameraViewProjectionMatrix
+        );
+        _pointsProgram->setUniform(_uniformCachePoints.eyePosition, eyePosition);
+        _pointsProgram->setUniform(
+            _uniformCachePoints.opacityCoefficient,
+            _opacityCoefficient
+        );
+    }
+    else {
+        const auto [mHi, mLo] = splitDmat4(modelTransform);
+        const auto [vpHi, vpLo] = splitDmat4(cameraViewProjectionMatrix);
+        const auto [eyeHi, eyeLo] = splitDvec3(eyePosition);
+        _pointsProgram->setUniform(_uniformCachePointsFloat.modelMatrix_hi, mHi);
+        _pointsProgram->setUniform(_uniformCachePointsFloat.modelMatrix_lo, mLo);
+        _pointsProgram->setUniform(
+            _uniformCachePointsFloat.viewProjectionMatrix_hi,
+            vpHi
+        );
+        _pointsProgram->setUniform(
+            _uniformCachePointsFloat.viewProjectionMatrix_lo,
+            vpLo
+        );
+        _pointsProgram->setUniform(_uniformCachePointsFloat.eyePosition_hi, eyeHi);
+        _pointsProgram->setUniform(_uniformCachePointsFloat.eyePosition_lo, eyeLo);
+        _pointsProgram->setUniform(
+            _uniformCachePointsFloat.opacityCoefficient,
+            _opacityCoefficient
+        );
+    }
 
     glBindVertexArray(_pointsVao);
     glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(_nPoints * _enabledPointsRatio));
@@ -685,24 +739,47 @@ void RenderableGalaxy::renderBillboards(const RenderData& data) {
     const glm::dmat4 cameraViewProjectionMatrix =
         glm::dmat4(data.camera.projectionMatrix()) * data.camera.combinedViewMatrix();
 
-    _billboardsProgram->setUniform(_uniformCacheBillboards.modelMatrix, modelTransform);
-    _billboardsProgram->setUniform(
-        _uniformCacheBillboards.viewProjectionMatrix,
-        cameraViewProjectionMatrix
-    );
-
     const glm::dvec3 eyePosition = glm::dvec3(
         glm::inverse(data.camera.combinedViewMatrix()) *
         glm::dvec4(0.0, 0.0, 0.0, 1.0)
     );
-    _billboardsProgram->setUniform(_uniformCacheBillboards.eyePosition, eyePosition);
-
     const glm::dvec3 cameraUp = data.camera.lookUpVectorWorldSpace();
-    _billboardsProgram->setUniform(_uniformCacheBillboards.cameraUp, cameraUp);
 
     opengl::TextureUnit psfUnit;
     psfUnit.bind(*_pointSpreadFunctionTexture);
-    _billboardsProgram->setUniform(_uniformCacheBillboards.psfTexture, psfUnit);
+
+    if (_gpuSupportsDouble) {
+        _billboardsProgram->setUniform(_uniformCacheBillboards.modelMatrix, modelTransform);
+        _billboardsProgram->setUniform(
+            _uniformCacheBillboards.viewProjectionMatrix,
+            cameraViewProjectionMatrix
+        );
+        _billboardsProgram->setUniform(_uniformCacheBillboards.eyePosition, eyePosition);
+        _billboardsProgram->setUniform(_uniformCacheBillboards.cameraUp, cameraUp);
+        _billboardsProgram->setUniform(_uniformCacheBillboards.psfTexture, psfUnit);
+    }
+    else {
+        const auto [mHi, mLo] = splitDmat4(modelTransform);
+        const auto [vpHi, vpLo] = splitDmat4(cameraViewProjectionMatrix);
+        const auto [eyeHi, eyeLo] = splitDvec3(eyePosition);
+        _billboardsProgram->setUniform(_uniformCacheBillboardsFloat.modelMatrix_hi, mHi);
+        _billboardsProgram->setUniform(_uniformCacheBillboardsFloat.modelMatrix_lo, mLo);
+        _billboardsProgram->setUniform(
+            _uniformCacheBillboardsFloat.viewProjectionMatrix_hi,
+            vpHi
+        );
+        _billboardsProgram->setUniform(
+            _uniformCacheBillboardsFloat.viewProjectionMatrix_lo,
+            vpLo
+        );
+        _billboardsProgram->setUniform(_uniformCacheBillboardsFloat.eyePosition_hi, eyeHi);
+        _billboardsProgram->setUniform(_uniformCacheBillboardsFloat.eyePosition_lo, eyeLo);
+        _billboardsProgram->setUniform(
+            _uniformCacheBillboardsFloat.cameraUp,
+            glm::vec3(cameraUp)
+        );
+        _billboardsProgram->setUniform(_uniformCacheBillboardsFloat.psfTexture, psfUnit);
+    }
 
     glBindVertexArray(_pointsVao);
     glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(_nPoints * _enabledPointsRatio));

@@ -318,6 +318,8 @@ private:
     // Labels
     GlobeLabelsComponent _globeLabelsComponent;
     Dictionary _labelsDictionary;
+
+    bool _gpuSupportsDouble = true;
 };
 
 } // namespace openspace

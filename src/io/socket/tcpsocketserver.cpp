@@ -75,14 +75,20 @@ namespace {
     }
 
     void setOptions(_SOCKET socket) {
-        constexpr int TrueFlag = 1;
-        const char* trueFlag = reinterpret_cast<const char*>(&TrueFlag);
+        const char trueFlag = 1;
 
         // Set no delay
-        setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, trueFlag, sizeof(int));
+        setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &trueFlag, sizeof(trueFlag));
 
-        setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, trueFlag, sizeof(int));
-        setsockopt(socket, SOL_SOCKET, SO_KEEPALIVE, trueFlag, sizeof(int));
+        // Set send timeout
+        const char timeout = 0; // infinite
+        setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
+        // Set receive timeout
+        setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+        setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof(int));
+        setsockopt(socket, SOL_SOCKET, SO_KEEPALIVE, &trueFlag, sizeof(int));
     }
 } // namespace
 

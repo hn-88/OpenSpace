@@ -39,6 +39,7 @@
 #include <openspace/opengl/textureunit.h>
 #include <openspace/rendering/renderengine.h>
 #include <openspace/util/geodetic.h>
+#include <openspace/util/nogpudouble.h>
 #include <openspace/util/updatestructures.h>
 #include <geos/geom/Coordinate.h>
 #include <geos/geom/Geometry.h>
@@ -88,6 +89,7 @@ void GlobeGeometryFeature::setOffsets(glm::vec3 offsets) {
 void GlobeGeometryFeature::initializeGL(opengl::ProgramObject* pointsProgram,
                                         opengl::ProgramObject* linesAndPolygonsProgram)
 {
+    _gpuSupportsDouble = !checkNoGpuDoubleEnv();
     _pointsProgram = pointsProgram;
     _linesAndPolygonsProgram = linesAndPolygonsProgram;
 
@@ -319,9 +321,21 @@ void GlobeGeometryFeature::render(const RenderData& renderData, int pass,
             _pointsProgram : _linesAndPolygonsProgram;
 
         shader->activate();
-        shader->setUniform("modelTransform", globeModelTransform);
-        shader->setUniform("viewTransform", renderData.camera.combinedViewMatrix());
-        shader->setUniform("projectionTransform", projectionTransform);
+        if (_gpuSupportsDouble) {
+            shader->setUniform("modelTransform", globeModelTransform);
+            shader->setUniform("viewTransform", renderData.camera.combinedViewMatrix());
+            shader->setUniform("projectionTransform", projectionTransform);
+        }
+        else {
+            glm::mat4 m_hi, m_lo, v_hi, v_lo;
+            splitDmat4(globeModelTransform, m_hi, m_lo);
+            splitDmat4(renderData.camera.combinedViewMatrix(), v_hi, v_lo);
+            shader->setUniform("modelTransform_hi", m_hi);
+            shader->setUniform("modelTransform_lo", m_lo);
+            shader->setUniform("viewTransform_hi", v_hi);
+            shader->setUniform("viewTransform_lo", v_lo);
+            shader->setUniform("projectionTransform", glm::mat4(projectionTransform));
+        }
 
         shader->setUniform("heightOffset", _offsets.z);
         shader->setUniform("useHeightMapData", useHeightMap());
@@ -412,7 +426,15 @@ void GlobeGeometryFeature::renderPoints(const RenderFeature& feature,
     _pointsProgram->setUniform("cameraRight", glm::vec3(orthoRight));
 
     const glm::dvec3 cameraPositionWorld = renderData.camera.position();
-    _pointsProgram->setUniform("cameraPosition", cameraPositionWorld);
+    if (_gpuSupportsDouble) {
+        _pointsProgram->setUniform("cameraPosition", cameraPositionWorld);
+    }
+    else {
+        glm::vec3 cam_hi, cam_lo;
+        splitDvec3(cameraPositionWorld, cam_hi, cam_lo);
+        _pointsProgram->setUniform("cameraPosition_hi", cam_hi);
+        _pointsProgram->setUniform("cameraPosition_lo", cam_lo);
+    }
     _pointsProgram->setUniform("cameraLookUp", glm::vec3(cameraUpDirWorld));
 
     opengl::TextureUnit unit;

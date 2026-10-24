@@ -44,6 +44,7 @@
 #include <openspace/rendering/colormappingcomponent.h>
 #include <openspace/rendering/labelscomponent.h>
 #include <openspace/util/distanceconversion.h>
+#include <openspace/util/nogpudouble.h>
 #include <filesystem>
 #include <memory>
 #include <unordered_map>
@@ -224,6 +225,7 @@ protected:
     std::filesystem::path _texturesDirectory;
 
     opengl::ProgramObject* _program = nullptr;
+    bool _gpuSupportsDouble = true;
 
     UniformCache(
         cameraViewMatrix, projectionMatrix, modelMatrix, cameraPosition, cameraLookUp,
@@ -235,6 +237,18 @@ protected:
         outlineColor, outlineWeight, outlineStyle, useCmapOutline, aspectRatioScale,
         useOrientationData
     ) _uniformCache;
+
+    UniformCache(
+        cameraViewMatrix_hi, cameraViewMatrix_lo, projectionMatrix, modelMatrix_hi,
+        modelMatrix_lo, cameraPosition_hi, cameraPosition_lo, cameraLookUp,
+        renderOption, maxAngularSize, color, opacity, scaleExponent, scaleFactor, up,
+        right, fadeInValue, hasSpriteTexture, spriteTexture, useTextureAlpha, useColorMap,
+        colorMapTexture, cmapRangeMin, cmapRangeMax, nanColor, useNanColor,
+        hideOutsideRange, enableMaxSizeControl, aboveRangeColor, useAboveRangeColor,
+        belowRangeColor, useBelowRangeColor, hasDvarScaling, dvarScaleFactor, enableOutline,
+        outlineColor, outlineWeight, outlineStyle, useCmapOutline, aspectRatioScale,
+        useOrientationData
+    ) _uniformCacheFloat;
 
     std::filesystem::path _dataFile;
 

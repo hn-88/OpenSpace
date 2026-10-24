@@ -33,6 +33,7 @@
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/scalar/uintproperty.h>
 #include <openspace/properties/vector/vec3property.h>
+#include <openspace/util/nogpudouble.h>
 
 namespace openspace {
 
@@ -66,6 +67,7 @@ private:
     Shading _shading;
 
     opengl::ProgramObject* _shaderProgram = nullptr;
+    bool _gpuSupportsDouble = true;
 
     StringProperty _start;
     StringProperty _end;

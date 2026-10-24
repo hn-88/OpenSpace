@@ -30,6 +30,7 @@
 #include <openspace/opengl/gl.h>
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/vector/vec3property.h>
+#include <openspace/util/nogpudouble.h>
 
 namespace openspace {
 
@@ -51,6 +52,7 @@ protected:
     };
 
     opengl::ProgramObject* _gridProgram = nullptr;
+    bool _gpuSupportsDouble = true;
 
     Vec3Property _color;
     FloatProperty _lineWidth;

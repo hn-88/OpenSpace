@@ -46,12 +46,16 @@ source_group("Source Files" FILES ${SOURCE_FILES})
 set(SHADER_FILES
   shaders/billboard_fs.glsl
   shaders/billboard_gs.glsl
+  shaders/billboard_gs_float.glsl
   shaders/billboard_vs.glsl
+  shaders/df64.glsl
   shaders/galaxyraycast.glsl
   shaders/points_fs.glsl
   shaders/points_vs.glsl
+  shaders/points_vs_float.glsl
   shaders/raycasterbounds_fs.glsl
   shaders/raycasterbounds_vs.glsl
+  shaders/raycasterbounds_vs_float.glsl
 )
 
 source_group("Shader Files" FILES ${SHADER_FILES})

@@ -40,6 +40,7 @@
 #include <openspace/properties/vector/vec4property.h>
 #include <openspace/rendering/transferfunction.h>
 #include <openspace/util/dynamicfilesequencedownloader.h>
+#include <openspace/util/nogpudouble.h>
 #include <deque>
 #include <memory>
 
@@ -154,6 +155,7 @@ private:
 
     bool _isLoadingStateFromDisk = false;
 
+    bool _gpuSupportsDouble = true;
     std::unique_ptr<opengl::ProgramObject> _shaderProgram;
     /// Transfer function used to color lines when _pColorMethod is set to BY_QUANTITY
     std::unique_ptr<TransferFunction> _transferFunction;

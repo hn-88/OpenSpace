@@ -35,6 +35,7 @@
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/scalar/intproperty.h>
 #include <openspace/properties/vector/vec3property.h>
+#include <openspace/util/nogpudouble.h>
 
 namespace openspace {
 
@@ -194,11 +195,18 @@ private:
 
     /// Program object used to render the data stored in RenderInformation
     opengl::ProgramObject* _programObject = nullptr;
+    bool _gpuSupportsDouble = true;
     UniformCache(opacity, modelViewTransform, projectionTransform, color, useLineFade,
         lineLength, lineFadeAmount, vertexSortingMethod, idOffset, nVertices, stride,
         pointSize, renderPhase, viewport, lineWidth, floatingOffset, useSplitRenderMode,
         numberOfUniqueVertices
     ) _uniformCache;
+
+    UniformCache(opacity, modelViewTransform_hi, modelViewTransform_lo,
+        projectionTransform, color, useLineFade, lineLength, lineFadeAmount,
+        vertexSortingMethod, idOffset, nVertices, stride, pointSize, renderPhase, viewport,
+        lineWidth, floatingOffset, useSplitRenderMode, numberOfUniqueVertices
+    ) _uniformCacheFloat;
 };
 
 } // namespace openspace

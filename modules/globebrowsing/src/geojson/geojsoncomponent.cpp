@@ -41,6 +41,7 @@
 #include <openspace/scripting/scriptengine.h>
 #include <openspace/util/ellipsoid.h>
 #include <openspace/util/geodetic.h>
+#include <openspace/util/nogpudouble.h>
 #include <openspace/util/updatestructures.h>
 #include <geos/geom/CoordinateSequence.h>
 #include <geos/geom/Point.h>
@@ -479,17 +480,26 @@ void GeoJsonComponent::initialize() {
 void GeoJsonComponent::initializeGL() {
     ZoneScoped;
 
+    _gpuSupportsDouble = !checkNoGpuDoubleEnv();
+    if (!_gpuSupportsDouble) {
+        LINFO("NO_GPU_DOUBLE environment variable detected. Using float shaders for GeoJSON.");
+    }
+
     _linesAndPolygonsProgram = global::renderEngine->buildRenderProgram(
-        "GeoLinesAndPolygonProgram",
-        absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_vs.glsl"),
+        _gpuSupportsDouble ? "GeoLinesAndPolygonProgram" : "GeoLinesAndPolygonProgramFloat",
+        _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_vs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_vs_float.glsl"),
         absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_fs.glsl")
     );
 
     _pointsProgram = global::renderEngine->buildRenderProgram(
-        "GeoPointsProgram",
+        _gpuSupportsDouble ? "GeoPointsProgram" : "GeoPointsProgramFloat",
         absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_points_vs.glsl"),
         absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_points_fs.glsl"),
-        absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_points_gs.glsl")
+        _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_points_gs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/geojson_points_gs_float.glsl")
     );
 
     for (GlobeGeometryFeature& g : _geometryFeatures) {

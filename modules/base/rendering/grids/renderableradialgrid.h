@@ -35,6 +35,7 @@
 #include <openspace/properties/vector/vec3property.h>
 #include <openspace/rendering/helper.h>
 #include <openspace/rendering/labelscomponent.h>
+#include <openspace/util/nogpudouble.h>
 #include <memory>
 
 namespace openspace {
@@ -71,6 +72,7 @@ protected:
     };
 
     opengl::ProgramObject* _gridProgram = nullptr;
+    bool _gpuSupportsDouble = true;
 
     Vec3Property _color;
     IVec2Property _gridSegments;

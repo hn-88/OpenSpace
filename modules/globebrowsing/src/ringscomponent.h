@@ -40,6 +40,7 @@
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/scalar/intproperty.h>
 #include <openspace/properties/vector/vec2property.h>
+#include <openspace/util/nogpudouble.h>
 #include <functional>
 
 namespace openspace {
@@ -105,6 +106,7 @@ private:
     FloatProperty _zFightingPercentage;
     IntProperty _nShadowSamples;
 
+    bool _gpuSupportsDouble = true;
     std::unique_ptr<opengl::ProgramObject> _shader;
     std::unique_ptr<opengl::ProgramObject> _geometryOnlyShader;
     UniformCache(modelViewProjectionMatrix, textureOffset, colorFilterValue, nightFactor,
@@ -117,6 +119,18 @@ private:
         opacity, ellipsoidRadii
     ) _uniformCacheAdvancedRings;
     UniformCache(modelViewProjectionMatrix, textureOffset, ringTexture) _geomUniformCache;
+
+    UniformCache(modelViewProjectionMatrix_hi, modelViewProjectionMatrix_lo,
+        textureOffset, colorFilterValue, nightFactor, sunPosition, sunPositionObj,
+        ringTexture, opacity, ellipsoidRadii
+    ) _uniformCacheFloat;
+    UniformCache(modelViewProjectionMatrix_hi, modelViewProjectionMatrix_lo,
+        textureOffset, colorFilterValue, nightFactor, sunPosition, sunPositionObj,
+        camPositionObj, textureForwards, textureBackwards, textureUnlit, textureColor,
+        textureTransparency, opacity, ellipsoidRadii
+    ) _uniformCacheAdvancedRingsFloat;
+    UniformCache(modelViewProjectionMatrix_hi, modelViewProjectionMatrix_lo,
+        textureOffset, ringTexture) _geomUniformCacheFloat;
 
     std::unique_ptr<opengl::Texture> _texture;
     std::unique_ptr<opengl::Texture> _textureForwards;

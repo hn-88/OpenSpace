@@ -224,9 +224,11 @@ if(OS_LINUX)
 
   # List of CEF resource files.
   set(CEF_RESOURCE_FILES
-    chrome_100_percent.pak
-    chrome_200_percent.pak
-    resources.pak
+    cef.pak
+    cef_100_percent.pak
+    cef_200_percent.pak
+    cef_extensions.pak
+    devtools_resources.pak
     icudtl.dat
     locales
     )

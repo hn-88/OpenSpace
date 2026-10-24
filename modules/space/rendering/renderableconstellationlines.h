@@ -77,8 +77,10 @@ private:
     BoolProperty _drawElements;
 
     std::unique_ptr<opengl::ProgramObject> _program = nullptr;
-    UniformCache(modelViewTransform, projectionTransform, opacity,
-        color) _uniformCache;
+    UniformCache(opacity, color) _uniformCacheCommon;
+    UniformCache(modelViewTransform, projectionTransform) _uniformCacheDouble;
+    UniformCache(modelViewTransform_hi, modelViewTransform_lo, projectionTransform) _uniformCacheFloat;
+    bool _gpuSupportsDouble = true;
 
     DistanceUnit _constellationUnit = DistanceUnit::Parsec;
 

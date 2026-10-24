@@ -196,21 +196,45 @@ void RenderableRadialGrid::initialize() {
 }
 
 void RenderableRadialGrid::initializeGL() {
-    _gridProgram = BaseModule::ProgramObjectManager.request(
-        "GridProgram",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-            return global::renderEngine->buildRenderProgram(
-                "GridProgram",
-                absPath("${MODULE_BASE}/shaders/grid_vs.glsl"),
-                absPath("${MODULE_BASE}/shaders/grid_fs.glsl")
-            );
-        }
-    );
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Grid shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
+    if (_gpuSupportsDouble) {
+        _gridProgram = BaseModule::ProgramObjectManager.request(
+            "GridProgram",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "GridProgram",
+                    absPath("${MODULE_BASE}/shaders/grid_vs.glsl"),
+                    absPath("${MODULE_BASE}/shaders/grid_fs.glsl")
+                );
+            }
+        );
+    }
+    else {
+        _gridProgram = BaseModule::ProgramObjectManager.request(
+            "GridProgramFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "GridProgramFloat",
+                    absPath("${MODULE_BASE}/shaders/grid_vs_float.glsl"),
+                    absPath("${MODULE_BASE}/shaders/grid_fs.glsl")
+                );
+            }
+        );
+    }
 }
 
 void RenderableRadialGrid::deinitializeGL() {
     BaseModule::ProgramObjectManager.release(
-        "GridProgram",
+        _gpuSupportsDouble ? "GridProgram" : "GridProgramFloat",
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
@@ -224,8 +248,18 @@ void RenderableRadialGrid::render(const RenderData& data, RendererTasks&) {
     auto [modelTransform, modelViewTransform, modelViewProjectionTransform] =
         calcAllTransforms(data);
 
-    _gridProgram->setUniform("modelView", modelViewTransform);
-    _gridProgram->setUniform("modelViewProjection", modelViewProjectionTransform);
+    if (_gpuSupportsDouble) {
+        _gridProgram->setUniform("modelView", modelViewTransform);
+        _gridProgram->setUniform("modelViewProjection", modelViewProjectionTransform);
+    }
+    else {
+        const auto [mvHi, mvLo] = splitDmat4(modelViewTransform);
+        const auto [mvpHi, mvpLo] = splitDmat4(modelViewProjectionTransform);
+        _gridProgram->setUniform("modelView_hi", mvHi);
+        _gridProgram->setUniform("modelView_lo", mvLo);
+        _gridProgram->setUniform("modelViewProjection_hi", mvpHi);
+        _gridProgram->setUniform("modelViewProjection_lo", mvpLo);
+    }
     _gridProgram->setUniform("opacity", opacity());
     _gridProgram->setUniform("gridColor", _color);
 

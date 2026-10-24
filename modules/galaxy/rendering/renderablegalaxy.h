@@ -33,6 +33,7 @@
 #include <openspace/properties/misc/optionproperty.h>
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/vector/vec3property.h>
+#include <openspace/util/nogpudouble.h>
 #include <filesystem>
 #include <memory>
 
@@ -97,12 +98,21 @@ private:
 
     std::unique_ptr<opengl::ProgramObject> _pointsProgram;
     std::unique_ptr<opengl::ProgramObject> _billboardsProgram;
+    bool _gpuSupportsDouble = true;
     UniformCache(
         modelMatrix, viewProjectionMatrix, eyePosition, opacityCoefficient
     ) _uniformCachePoints;
     UniformCache(
         modelMatrix, viewProjectionMatrix, cameraUp, eyePosition, psfTexture
     ) _uniformCacheBillboards;
+    UniformCache(
+        modelMatrix_hi, modelMatrix_lo, viewProjectionMatrix_hi, viewProjectionMatrix_lo,
+        eyePosition_hi, eyePosition_lo, opacityCoefficient
+    ) _uniformCachePointsFloat;
+    UniformCache(
+        modelMatrix_hi, modelMatrix_lo, viewProjectionMatrix_hi, viewProjectionMatrix_lo,
+        cameraUp, eyePosition_hi, eyePosition_lo, psfTexture
+    ) _uniformCacheBillboardsFloat;
     std::vector<float> _pointsData;
     size_t _nPoints = 0;
     GLuint _pointsVao = 0;

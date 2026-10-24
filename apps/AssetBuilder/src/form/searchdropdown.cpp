@@ -28,7 +28,6 @@
 #include <QCursor>
 #include <QEvent>
 #include <QHBoxLayout>
-#include <QIcon>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
@@ -36,9 +35,8 @@
 #include <QVBoxLayout>
 
 namespace {
-    constexpr const char* ArrowDown = ":/images/dropdown-arrow.png";
-    constexpr const char* ArrowUp = ":/images/dropdown-arrow-up.png";
-    constexpr QSize ArrowSize = QSize(10, 6);
+    constexpr const char* ChevronDown = "\xe2\x96\xbe";  // v
+    constexpr const char* ChevronUp = "\xe2\x96\xb4";  // ^
 } // namespace
 
 SearchDropdown::SearchDropdown(QWidget* parent)
@@ -56,9 +54,7 @@ SearchDropdown::SearchDropdown(QWidget* parent)
     _searchEdit->installEventFilter(this);
     layout->addWidget(_searchEdit, 1);
 
-    _chevronButton = new QPushButton(this);
-    _chevronButton->setIcon(QIcon(ArrowDown));
-    _chevronButton->setIconSize(ArrowSize);
+    _chevronButton = new QPushButton(ChevronDown, this);
     _chevronButton->setObjectName("search-dropdown-chevron");
     _chevronButton->setFixedWidth(22);
     layout->addWidget(_chevronButton);
@@ -203,7 +199,7 @@ void SearchDropdown::openPopup() {
     _popup->raise();
 
     qApp->installEventFilter(this);
-    _chevronButton->setIcon(QIcon(ArrowUp));
+    _chevronButton->setText(ChevronUp);
     _searchEdit->setFocus();
 }
 
@@ -214,7 +210,7 @@ void SearchDropdown::closePopup() {
     _isOpen = false;
     qApp->removeEventFilter(this);
     _popup->hide();
-    _chevronButton->setIcon(QIcon(ArrowDown));
+    _chevronButton->setText(ChevronDown);
     updateSearchText();
 }
 

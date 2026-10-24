@@ -35,7 +35,9 @@ set(SOURCE_FILES
 source_group("Source Files" FILES ${SOURCE_FILES})
 
 set(SHADER_FILES
+  shaders/df64.glsl
   shaders/dumesh_vs.glsl
+  shaders/dumesh_vs_float.glsl
   shaders/dumesh_fs.glsl
 )
 source_group("Shader Files" FILES ${SHADER_FILES})

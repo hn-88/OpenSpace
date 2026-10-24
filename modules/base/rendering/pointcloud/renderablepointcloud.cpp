@@ -934,9 +934,24 @@ void RenderablePointCloud::initialize() {
 void RenderablePointCloud::initializeGL() {
     ZoneScoped;
 
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float PointCloud shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
     initializeShadersAndGlExtras();
 
-    opengl::updateUniformLocations(*_program, _uniformCache);
+    if (_gpuSupportsDouble) {
+        opengl::updateUniformLocations(*_program, _uniformCache);
+    }
+    else {
+        opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+    }
 
     if (_hasSpriteTexture) {
         switch (_textureMode) {
@@ -965,14 +980,19 @@ void RenderablePointCloud::deinitializeGL() {
 }
 
 void RenderablePointCloud::initializeShadersAndGlExtras() {
+    const std::string name =
+        _gpuSupportsDouble ? "RenderablePointCloud" : "RenderablePointCloudFloat";
     _program = BaseModule::ProgramObjectManager.request(
-        "RenderablePointCloud",
-        []() {
+        name,
+        [this, name]() {
+            const std::filesystem::path gs = _gpuSupportsDouble ?
+                absPath("${MODULE_BASE}/shaders/pointcloud/pointcloud_gs.glsl") :
+                absPath("${MODULE_BASE}/shaders/pointcloud/pointcloud_gs_float.glsl");
             return global::renderEngine->buildRenderProgram(
-                "RenderablePointCloud",
+                name,
                 absPath("${MODULE_BASE}/shaders/pointcloud/pointcloud_vs.glsl"),
                 absPath("${MODULE_BASE}/shaders/pointcloud/pointcloud_fs.glsl"),
-                absPath("${MODULE_BASE}/shaders/pointcloud/pointcloud_gs.glsl")
+                gs
             );
         }
     );
@@ -982,8 +1002,10 @@ void RenderablePointCloud::initializeShadersAndGlExtras() {
 }
 
 void RenderablePointCloud::deinitializeShaders() {
+    const std::string name =
+        _gpuSupportsDouble ? "RenderablePointCloud" : "RenderablePointCloudFloat";
     BaseModule::ProgramObjectManager.release(
-        "RenderablePointCloud",
+        name,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
@@ -1270,23 +1292,45 @@ void RenderablePointCloud::renderPoints(const RenderData& data,
 
     _program->activate();
 
-    _program->setUniform(_uniformCache.cameraPosition, data.camera.position());
-    _program->setUniform(
-        _uniformCache.cameraLookUp,
-        glm::vec3(data.camera.lookUpVectorWorldSpace())
-    );
-    _program->setUniform(_uniformCache.renderOption, _renderOption.value());
-    _program->setUniform(_uniformCache.modelMatrix, modelMatrix);
+    if (_gpuSupportsDouble) {
+        _program->setUniform(_uniformCache.cameraPosition, data.camera.position());
+        _program->setUniform(
+            _uniformCache.cameraLookUp,
+            glm::vec3(data.camera.lookUpVectorWorldSpace())
+        );
+        _program->setUniform(_uniformCache.renderOption, _renderOption.value());
+        _program->setUniform(_uniformCache.modelMatrix, modelMatrix);
 
-    _program->setUniform(
-        _uniformCache.cameraViewMatrix,
-        data.camera.combinedViewMatrix()
-    );
+        _program->setUniform(
+            _uniformCache.cameraViewMatrix,
+            data.camera.combinedViewMatrix()
+        );
 
-    _program->setUniform(
-        _uniformCache.projectionMatrix,
-        glm::dmat4(data.camera.projectionMatrix())
-    );
+        _program->setUniform(
+            _uniformCache.projectionMatrix,
+            glm::dmat4(data.camera.projectionMatrix())
+        );
+    }
+    else {
+        const auto [camHi, camLo] = splitDvec3(data.camera.position());
+        const auto [mHi, mLo] = splitDmat4(modelMatrix);
+        const auto [vHi, vLo] = splitDmat4(data.camera.combinedViewMatrix());
+        _program->setUniform(_uniformCacheFloat.cameraPosition_hi, camHi);
+        _program->setUniform(_uniformCacheFloat.cameraPosition_lo, camLo);
+        _program->setUniform(
+            _uniformCacheFloat.cameraLookUp,
+            glm::vec3(data.camera.lookUpVectorWorldSpace())
+        );
+        _program->setUniform(_uniformCacheFloat.renderOption, _renderOption.value());
+        _program->setUniform(_uniformCacheFloat.modelMatrix_hi, mHi);
+        _program->setUniform(_uniformCacheFloat.modelMatrix_lo, mLo);
+        _program->setUniform(_uniformCacheFloat.cameraViewMatrix_hi, vHi);
+        _program->setUniform(_uniformCacheFloat.cameraViewMatrix_lo, vLo);
+        _program->setUniform(
+            _uniformCacheFloat.projectionMatrix,
+            data.camera.projectionMatrix()
+        );
+    }
 
     _program->setUniform(_uniformCache.up, glm::vec3(orthoUp));
     _program->setUniform(_uniformCache.right, glm::vec3(orthoRight));

@@ -332,15 +332,20 @@ void RenderableInterpolatedPoints::initialize() {
 }
 
 void RenderableInterpolatedPoints::initializeShadersAndGlExtras() {
+    const std::string name =
+        _gpuSupportsDouble ? "RenderablePointCloud_Interpolated" : "RenderablePointCloud_InterpolatedFloat";
     _program = BaseModule::ProgramObjectManager.request(
-        "RenderablePointCloud_Interpolated",
-        []() {
+        name,
+        [this, name]() {
             std::filesystem::path path = absPath("${MODULE_BASE}/shaders/pointcloud");
+            const std::filesystem::path gs = _gpuSupportsDouble ?
+                path / "pointcloud_gs.glsl" :
+                path / "pointcloud_gs_float.glsl";
             return global::renderEngine->buildRenderProgram(
-                "RenderablePointCloud_Interpolated",
+                name,
                 path / "pointcloud_interpolated_vs.glsl",
                 path / "pointcloud_fs.glsl",
-                path / "pointcloud_gs.glsl"
+                gs
             );
         }
     );
@@ -349,8 +354,10 @@ void RenderableInterpolatedPoints::initializeShadersAndGlExtras() {
 }
 
 void RenderableInterpolatedPoints::deinitializeShaders() {
+    const std::string name =
+        _gpuSupportsDouble ? "RenderablePointCloud_Interpolated" : "RenderablePointCloud_InterpolatedFloat";
     BaseModule::ProgramObjectManager.release(
-        "RenderablePointCloud_Interpolated",
+        name,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }

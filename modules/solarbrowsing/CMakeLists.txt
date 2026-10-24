@@ -48,12 +48,15 @@ set(SOURCE_FILES
 source_group("Source Files" FILES ${SOURCE_FILES})
 
 set(SHADER_FILES
+  shaders/df64.glsl
   shaders/spacecraftimagefrustum_fs.glsl
   shaders/spacecraftimagefrustum_vs.glsl
   shaders/spacecraftimageplane_fs.glsl
   shaders/spacecraftimageplane_vs.glsl
   shaders/spacecraftimageprojection_fs.glsl
+  shaders/spacecraftimageprojection_fs_float.glsl
   shaders/spacecraftimageprojection_vs.glsl
+  shaders/spacecraftimageprojection_vs_float.glsl
 )
 source_group("Shader Files" FILES ${SHADER_FILES})
 

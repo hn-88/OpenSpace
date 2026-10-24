@@ -185,24 +185,31 @@ source_group("Source Files" FILES ${SOURCE_FILES})
 set(SHADER_FILES
   shaders/arrow_fs.glsl
   shaders/arrow_vs.glsl
+  shaders/arrow_vs_float.glsl
   shaders/axes_fs.glsl
   shaders/axes_vs.glsl
+  shaders/df64.glsl
   shaders/disc_fs.glsl
   shaders/disc_vs.glsl
   shaders/grid_vs.glsl
+  shaders/grid_vs_float.glsl
   shaders/grid_fs.glsl
   shaders/line_fs.glsl
   shaders/line_vs.glsl
+  shaders/line_vs_float.glsl
   shaders/model_depth_fs.glsl
   shaders/model_depth_vs.glsl
+  shaders/model_depth_vs_float.glsl
   shaders/model_fs.glsl
   shaders/model_vs.glsl
+  shaders/model_vs_float.glsl
   shaders/modelopacity_fs.glsl
   shaders/modelopacity_vs.glsl
   shaders/plane_fs.glsl
   shaders/plane_vs.glsl
   shaders/pointcloud/pointcloud_fs.glsl
   shaders/pointcloud/pointcloud_gs.glsl
+  shaders/pointcloud/pointcloud_gs_float.glsl
   shaders/pointcloud/pointcloud_interpolated_vs.glsl
   shaders/pointcloud/pointcloud_vs.glsl
   shaders/polygon_fs.glsl
@@ -211,7 +218,9 @@ set(SHADER_FILES
   shaders/prism_fs.glsl
   shaders/prism_vs.glsl
   shaders/renderabletrail_fs.glsl
+  shaders/renderabletrail_fs_float.glsl
   shaders/renderabletrail_vs.glsl
+  shaders/renderabletrail_vs_float.glsl
   shaders/screenspaceinsetblackout_vs.glsl
   shaders/screenspaceinsetblackout_fs.glsl
   shaders/sphere_fs.glsl

@@ -218,6 +218,8 @@ private:
     FloatProperty _perspectiveDistanceFactor;
     BoolProperty _pulseEnabled;
     BoolProperty _gaussianPulseEnabled;
+
+    bool _gpuSupportsDouble = true;
 };
 
 } // namespace openspace

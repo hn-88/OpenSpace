@@ -814,7 +814,20 @@ void RenderableModel::initializeGL() {
     }
 
     // Initialize shaders
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Model shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
     std::string program = std::string(ProgramName);
+    if (!_gpuSupportsDouble) {
+        program += "|float";
+    }
     if (!_vertexShaderPath.empty()) {
         program += "|vs=" + _vertexShaderPath.string();
     }
@@ -824,9 +837,12 @@ void RenderableModel::initializeGL() {
     _program = BaseModule::ProgramObjectManager.request(
         program,
         [this, program]() -> std::unique_ptr<opengl::ProgramObject> {
+            const std::filesystem::path defaultVs = _gpuSupportsDouble ?
+                absPath("${MODULE_BASE}/shaders/model_vs.glsl") :
+                absPath("${MODULE_BASE}/shaders/model_vs_float.glsl");
             const std::filesystem::path vs =
                 _vertexShaderPath.empty() ?
-                absPath("${MODULE_BASE}/shaders/model_vs.glsl") :
+                defaultVs :
                 _vertexShaderPath;
             const std::filesystem::path fs =
                 _fragmentShaderPath.empty() ?
@@ -843,6 +859,9 @@ void RenderableModel::initializeGL() {
     );
 
     opengl::updateUniformLocations(*_program, _uniformCache);
+    if (!_gpuSupportsDouble) {
+        opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+    }
 
     _quadProgram = BaseModule::ProgramObjectManager.request(
         "ModelOpacityProgram",
@@ -990,16 +1009,19 @@ void RenderableModel::deinitializeGL() {
 }
 
 void RenderableModel::createDepthMapResources() {
+    const std::string name =
+        _gpuSupportsDouble ? "ModelDepthMapProgram" : "ModelDepthMapProgramFloat";
     _depthMapProgram = BaseModule::ProgramObjectManager.request(
-        "ModelDepthMapProgram",
+        name,
         [&]() -> std::unique_ptr<opengl::ProgramObject> {
-            std::filesystem::path vs =
-                absPath("${MODULE_BASE}/shaders/model_depth_vs.glsl");
+            std::filesystem::path vs = _gpuSupportsDouble ?
+                absPath("${MODULE_BASE}/shaders/model_depth_vs.glsl") :
+                absPath("${MODULE_BASE}/shaders/model_depth_vs_float.glsl");
             std::filesystem::path fs =
                 absPath("${MODULE_BASE}/shaders/model_depth_fs.glsl");
 
             std::unique_ptr<opengl::ProgramObject> p =
-                global::renderEngine->buildRenderProgram("ModelDepthMapProgram", vs, fs);
+                global::renderEngine->buildRenderProgram(name, vs, fs);
             p->setIgnoreAttributeLocationError(opengl::ProgramObject::IgnoreError::Yes);
             p->setIgnoreUniformLocationError(opengl::ProgramObject::IgnoreError::Yes);
             return p;
@@ -1008,12 +1030,15 @@ void RenderableModel::createDepthMapResources() {
 }
 
 void RenderableModel::releaseDepthMapResources() {
+    const std::string name =
+        _gpuSupportsDouble ? "ModelDepthMapProgram" : "ModelDepthMapProgramFloat";
     BaseModule::ProgramObjectManager.release(
-        "ModelDepthMapProgram",
+        name,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
     );
+    _depthMapProgram = nullptr;
 }
 
 void RenderableModel::render(const RenderData& data, RendererTasks&) {
@@ -1126,8 +1151,18 @@ void RenderableModel::render(const RenderData& data, RendererTasks&) {
     if (_castShadow && _lightSource) {
         ShadowInfo sm = global::renderEngine->renderer().shadowInformation(_shadowGroup);
 
-        _program->setUniform(_uniformCache.model, modelTransform);
-        _program->setUniform(_uniformCache.light_vp, sm.viewProjectionMatrix);
+        if (_gpuSupportsDouble) {
+            _program->setUniform(_uniformCache.model, modelTransform);
+            _program->setUniform(_uniformCache.light_vp, sm.viewProjectionMatrix);
+        }
+        else {
+            const auto [mHi, mLo] = splitDmat4(modelTransform);
+            const auto [vpHi, vpLo] = splitDmat4(sm.viewProjectionMatrix);
+            _program->setUniform(_uniformCacheFloat.model_hi, mHi);
+            _program->setUniform(_uniformCacheFloat.model_lo, mLo);
+            _program->setUniform(_uniformCacheFloat.light_vp_hi, vpHi);
+            _program->setUniform(_uniformCacheFloat.light_vp_lo, vpLo);
+        }
 
         shadowUnit.bind(sm.depthMap.texture);
         _program->setUniform(_uniformCache.shadow_depth_map, shadowUnit);
@@ -1407,8 +1442,18 @@ void RenderableModel::renderForDepthMap(const glm::dmat4& vp) const {
         glm::translate(glm::dmat4(1.0), glm::dvec3(_pivot.value())) *
         glm::scale(_modelTransform.value(), glm::dvec3(_modelScale));
 
-    _depthMapProgram->setUniform("model", model);
-    _depthMapProgram->setUniform("light_vp", vp);
+    if (_gpuSupportsDouble) {
+        _depthMapProgram->setUniform("model", model);
+        _depthMapProgram->setUniform("light_vp", vp);
+    }
+    else {
+        const auto [mHi, mLo] = splitDmat4(model);
+        const auto [vpHi, vpLo] = splitDmat4(vp);
+        _depthMapProgram->setUniform("model_hi", mHi);
+        _depthMapProgram->setUniform("model_lo", mLo);
+        _depthMapProgram->setUniform("light_vp_hi", vpHi);
+        _depthMapProgram->setUniform("light_vp_lo", vpLo);
+    }
 
     glCullFace(GL_FRONT);
     if (isEnabled()) {

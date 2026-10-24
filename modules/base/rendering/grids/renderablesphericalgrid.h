@@ -32,6 +32,7 @@
 #include <openspace/properties/scalar/intproperty.h>
 #include <openspace/properties/vector/vec3property.h>
 #include <openspace/rendering/labelscomponent.h>
+#include <openspace/util/nogpudouble.h>
 #include <memory>
 
 namespace openspace {
@@ -55,7 +56,8 @@ protected:
         float location[3];
     };
 
-    opengl::ProgramObject* _gridProgram;
+    opengl::ProgramObject* _gridProgram = nullptr;
+    bool _gpuSupportsDouble = true;
 
     Vec3Property _color;
     IntProperty _longSegments;

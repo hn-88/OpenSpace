@@ -42,6 +42,8 @@ namespace {
         "${MODULE_GALAXY}/shaders/galaxyraycast.glsl";
     constexpr std::string_view GlslBoundsVsPath =
         "${MODULE_GALAXY}/shaders/raycasterbounds_vs.glsl";
+    constexpr std::string_view GlslBoundsVsFloatPath =
+        "${MODULE_GALAXY}/shaders/raycasterbounds_vs_float.glsl";
     constexpr std::string_view GlslBoundsFsPath =
         "${MODULE_GALAXY}/shaders/raycasterbounds_fs.glsl";
 } // namespace
@@ -59,13 +61,30 @@ GalaxyRaycaster::GalaxyRaycaster(opengl::Texture& texture,
 void GalaxyRaycaster::initialize() {
     ZoneScoped;
 
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Galaxy Raycaster bounds shader.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
     _boundingBox.initialize();
 }
 
 void GalaxyRaycaster::renderEntryPoints(const RenderData& data,
                                         opengl::ProgramObject& program)
 {
-    program.setUniform("modelViewTransform", modelViewTransform(data));
+    if (_gpuSupportsDouble) {
+        program.setUniform("modelViewTransform", modelViewTransform(data));
+    }
+    else {
+        const auto [mvHi, mvLo] = splitDmat4(modelViewTransform(data));
+        program.setUniform("modelViewTransform_hi", mvHi);
+        program.setUniform("modelViewTransform_lo", mvLo);
+    }
     program.setUniform("projectionTransform", data.camera.projectionMatrix());
 
     // Cull back face
@@ -79,7 +98,14 @@ void GalaxyRaycaster::renderEntryPoints(const RenderData& data,
 void GalaxyRaycaster::renderExitPoints(const RenderData& data,
                                        opengl::ProgramObject& program)
 {
-    program.setUniform("modelViewTransform", modelViewTransform(data));
+    if (_gpuSupportsDouble) {
+        program.setUniform("modelViewTransform", modelViewTransform(data));
+    }
+    else {
+        const auto [mvHi, mvLo] = splitDmat4(modelViewTransform(data));
+        program.setUniform("modelViewTransform_hi", mvHi);
+        program.setUniform("modelViewTransform_lo", mvLo);
+    }
     program.setUniform("projectionTransform", data.camera.projectionMatrix());
 
     // Cull front face
@@ -133,7 +159,9 @@ bool GalaxyRaycaster::isCameraInside(const RenderData& data, glm::vec3& localPos
 }
 
 std::filesystem::path GalaxyRaycaster::boundsVertexShaderPath() const {
-    return absPath(GlslBoundsVsPath);
+    return _gpuSupportsDouble ?
+        absPath(GlslBoundsVsPath) :
+        absPath(GlslBoundsVsFloatPath);
 }
 
 std::filesystem::path GalaxyRaycaster::boundsFragmentShaderPath() const {

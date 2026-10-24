@@ -360,17 +360,35 @@ bool RingsComponent::isReady() const {
 void RingsComponent::initializeGL() {
     ZoneScoped;
 
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Rings shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
     loadTexture();
     compileShadowShader();
 
     try {
+        const std::filesystem::path geomVs = _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/rings_geom_vs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/rings_geom_vs_float.glsl");
         _geometryOnlyShader = global::renderEngine->buildRenderProgram(
-            "RingsGeomOnlyProgram",
-            absPath("${MODULE_GLOBEBROWSING}/shaders/rings_geom_vs.glsl"),
+            _gpuSupportsDouble ? "RingsGeomOnlyProgram" : "RingsGeomOnlyProgramFloat",
+            geomVs,
             absPath("${MODULE_GLOBEBROWSING}/shaders/rings_geom_fs.glsl")
         );
 
-        opengl::updateUniformLocations(*_geometryOnlyShader, _geomUniformCache);
+        if (_gpuSupportsDouble) {
+            opengl::updateUniformLocations(*_geometryOnlyShader, _geomUniformCache);
+        }
+        else {
+            opengl::updateUniformLocations(*_geometryOnlyShader, _geomUniformCacheFloat);
+        }
     }
     catch (const RuntimeError& e) {
         LERROR(e.message);
@@ -447,56 +465,6 @@ void RingsComponent::draw(const RenderData& data, const ShadowComponent::ShadowM
     opengl::TextureUnit ringTextureColorUnit;
     opengl::TextureUnit ringTextureTransparencyUnit;
     if (_isAdvancedTextureEnabled) {
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.modelViewProjectionMatrix,
-            modelViewProjectionTransform
-        );
-        _shader->setUniform(_uniformCacheAdvancedRings.textureOffset, _offset);
-        _shader->setUniform(_uniformCacheAdvancedRings.colorFilterValue, _colorFilter);
-        _shader->setUniform(_uniformCacheAdvancedRings.nightFactor, _nightFactor);
-        _shader->setUniform(_uniformCacheAdvancedRings.sunPosition, _sunPosition);
-
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.sunPositionObj,
-            sunPositionObjectSpace
-        );
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.modelViewProjectionMatrix,
-            modelViewProjectionTransform
-        );
-
-        ringTextureFwrdUnit.bind(*_textureForwards);
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.textureForwards,
-            ringTextureFwrdUnit
-        );
-
-        ringTextureBckwrdUnit.bind(*_textureBackwards);
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.textureBackwards,
-            ringTextureBckwrdUnit
-        );
-
-        ringTextureUnlitUnit.bind(*_textureUnlit);
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.textureUnlit,
-            ringTextureUnlitUnit
-        );
-
-        ringTextureColorUnit.bind(*_textureColor);
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.textureColor,
-            ringTextureColorUnit
-        );
-
-        ringTextureTransparencyUnit.bind(*_textureTransparency);
-        _shader->setUniform(
-            _uniformCacheAdvancedRings.textureTransparency,
-            ringTextureTransparencyUnit
-        );
-        _shader->setUniform(_uniformCacheAdvancedRings.opacity, opacity());
-        _shader->setUniform(_uniformCacheAdvancedRings.ellipsoidRadii, _ellipsoidRadii);
-
         const glm::dmat4 camToObjectTransform = glm::inverse(
             data.camera.combinedViewMatrix() * modelTransform
         );
@@ -505,9 +473,86 @@ void RingsComponent::draw(const RenderData& data, const ShadowComponent::ShadowM
             glm::vec3(camToObjectTransform * glm::dvec4(0.0, 0.0, 0.0, 1.0))
         );
 
+        if (_gpuSupportsDouble) {
+            _shader->setUniform(
+                _uniformCacheAdvancedRings.modelViewProjectionMatrix,
+                modelViewProjectionTransform
+            );
+            _shader->setUniform(_uniformCacheAdvancedRings.textureOffset, _offset);
+            _shader->setUniform(_uniformCacheAdvancedRings.colorFilterValue, _colorFilter);
+            _shader->setUniform(_uniformCacheAdvancedRings.nightFactor, _nightFactor);
+            _shader->setUniform(_uniformCacheAdvancedRings.sunPosition, _sunPosition);
+            _shader->setUniform(
+                _uniformCacheAdvancedRings.sunPositionObj,
+                sunPositionObjectSpace
+            );
+            _shader->setUniform(_uniformCacheAdvancedRings.opacity, opacity());
+            _shader->setUniform(_uniformCacheAdvancedRings.ellipsoidRadii, _ellipsoidRadii);
+            _shader->setUniform(
+                _uniformCacheAdvancedRings.camPositionObj,
+                _camPositionObjectSpace
+            );
+        }
+        else {
+            glm::mat4 mvp_hi, mvp_lo;
+            splitDmat4(modelViewProjectionTransform, mvp_hi, mvp_lo);
+            _shader->setUniform(
+                _uniformCacheAdvancedRingsFloat.modelViewProjectionMatrix_hi,
+                mvp_hi
+            );
+            _shader->setUniform(
+                _uniformCacheAdvancedRingsFloat.modelViewProjectionMatrix_lo,
+                mvp_lo
+            );
+            _shader->setUniform(_uniformCacheAdvancedRingsFloat.textureOffset, _offset);
+            _shader->setUniform(_uniformCacheAdvancedRingsFloat.colorFilterValue, _colorFilter);
+            _shader->setUniform(_uniformCacheAdvancedRingsFloat.nightFactor, _nightFactor);
+            _shader->setUniform(_uniformCacheAdvancedRingsFloat.sunPosition, _sunPosition);
+            _shader->setUniform(
+                _uniformCacheAdvancedRingsFloat.sunPositionObj,
+                sunPositionObjectSpace
+            );
+            _shader->setUniform(_uniformCacheAdvancedRingsFloat.opacity, opacity());
+            _shader->setUniform(_uniformCacheAdvancedRingsFloat.ellipsoidRadii, _ellipsoidRadii);
+            _shader->setUniform(
+                _uniformCacheAdvancedRingsFloat.camPositionObj,
+                _camPositionObjectSpace
+            );
+        }
+
+        ringTextureFwrdUnit.bind(*_textureForwards);
         _shader->setUniform(
-            _uniformCacheAdvancedRings.camPositionObj,
-            _camPositionObjectSpace
+            _gpuSupportsDouble ? _uniformCacheAdvancedRings.textureForwards :
+            _uniformCacheAdvancedRingsFloat.textureForwards,
+            ringTextureFwrdUnit
+        );
+
+        ringTextureBckwrdUnit.bind(*_textureBackwards);
+        _shader->setUniform(
+            _gpuSupportsDouble ? _uniformCacheAdvancedRings.textureBackwards :
+            _uniformCacheAdvancedRingsFloat.textureBackwards,
+            ringTextureBckwrdUnit
+        );
+
+        ringTextureUnlitUnit.bind(*_textureUnlit);
+        _shader->setUniform(
+            _gpuSupportsDouble ? _uniformCacheAdvancedRings.textureUnlit :
+            _uniformCacheAdvancedRingsFloat.textureUnlit,
+            ringTextureUnlitUnit
+        );
+
+        ringTextureColorUnit.bind(*_textureColor);
+        _shader->setUniform(
+            _gpuSupportsDouble ? _uniformCacheAdvancedRings.textureColor :
+            _uniformCacheAdvancedRingsFloat.textureColor,
+            ringTextureColorUnit
+        );
+
+        ringTextureTransparencyUnit.bind(*_textureTransparency);
+        _shader->setUniform(
+            _gpuSupportsDouble ? _uniformCacheAdvancedRings.textureTransparency :
+            _uniformCacheAdvancedRingsFloat.textureTransparency,
+            ringTextureTransparencyUnit
         );
 
         glEnable(GL_DEPTH_TEST);
@@ -515,26 +560,44 @@ void RingsComponent::draw(const RenderData& data, const ShadowComponent::ShadowM
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
     else {
-        _shader->setUniform(
-            _uniformCache.modelViewProjectionMatrix,
-            modelViewProjectionTransform
-        );
-        _shader->setUniform(_uniformCache.textureOffset, _offset);
-        _shader->setUniform(_uniformCache.colorFilterValue, _colorFilter);
-        _shader->setUniform(_uniformCache.nightFactor, _nightFactor);
-        _shader->setUniform(_uniformCache.sunPosition, _sunPosition);
+        if (_gpuSupportsDouble) {
+            _shader->setUniform(
+                _uniformCache.modelViewProjectionMatrix,
+                modelViewProjectionTransform
+            );
+            _shader->setUniform(_uniformCache.textureOffset, _offset);
+            _shader->setUniform(_uniformCache.colorFilterValue, _colorFilter);
+            _shader->setUniform(_uniformCache.nightFactor, _nightFactor);
+            _shader->setUniform(_uniformCache.sunPosition, _sunPosition);
+            _shader->setUniform(_uniformCache.sunPositionObj, sunPositionObjectSpace);
+            _shader->setUniform(_uniformCache.opacity, opacity());
+            _shader->setUniform(_uniformCache.ellipsoidRadii, _ellipsoidRadii);
 
-        _shader->setUniform(_uniformCache.sunPositionObj, sunPositionObjectSpace);
+            ringTextureUnit.bind(*_texture);
+            _shader->setUniform(_uniformCache.ringTexture, ringTextureUnit);
+        }
+        else {
+            glm::mat4 mvp_hi, mvp_lo;
+            splitDmat4(modelViewProjectionTransform, mvp_hi, mvp_lo);
+            _shader->setUniform(
+                _uniformCacheFloat.modelViewProjectionMatrix_hi,
+                mvp_hi
+            );
+            _shader->setUniform(
+                _uniformCacheFloat.modelViewProjectionMatrix_lo,
+                mvp_lo
+            );
+            _shader->setUniform(_uniformCacheFloat.textureOffset, _offset);
+            _shader->setUniform(_uniformCacheFloat.colorFilterValue, _colorFilter);
+            _shader->setUniform(_uniformCacheFloat.nightFactor, _nightFactor);
+            _shader->setUniform(_uniformCacheFloat.sunPosition, _sunPosition);
+            _shader->setUniform(_uniformCacheFloat.sunPositionObj, sunPositionObjectSpace);
+            _shader->setUniform(_uniformCacheFloat.opacity, opacity());
+            _shader->setUniform(_uniformCacheFloat.ellipsoidRadii, _ellipsoidRadii);
 
-        _shader->setUniform(
-            _uniformCache.modelViewProjectionMatrix,
-            modelViewProjectionTransform
-        );
-        _shader->setUniform(_uniformCache.opacity, opacity());
-        _shader->setUniform(_uniformCache.ellipsoidRadii, _ellipsoidRadii);
-
-        ringTextureUnit.bind(*_texture);
-        _shader->setUniform(_uniformCache.ringTexture, ringTextureUnit);
+            ringTextureUnit.bind(*_texture);
+            _shader->setUniform(_uniformCacheFloat.ringTexture, ringTextureUnit);
+        }
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -562,7 +625,12 @@ void RingsComponent::update(const UpdateData& data) {
 
     if (_geometryOnlyShader->isDirty()) [[unlikely]] {
         _geometryOnlyShader->rebuildFromFile();
-        opengl::updateUniformLocations(*_geometryOnlyShader, _geomUniformCache);
+        if (_gpuSupportsDouble) {
+            opengl::updateUniformLocations(*_geometryOnlyShader, _geomUniformCache);
+        }
+        else {
+            opengl::updateUniformLocations(*_geometryOnlyShader, _geomUniformCacheFloat);
+        }
     }
 
     if (_planeIsDirty) [[unlikely]] {
@@ -718,25 +786,41 @@ void RingsComponent::compileShadowShader() {
         // Uses multiple textures for the Rings
         // See https://bjj.mmedia.is/data/s_rings/index.html for theory behind it
         if (_isAdvancedTextureEnabled) {
+            const std::filesystem::path vs = _gpuSupportsDouble ?
+                absPath("${MODULE_GLOBEBROWSING}/shaders/advanced_rings_vs.glsl") :
+                absPath("${MODULE_GLOBEBROWSING}/shaders/advanced_rings_vs_float.glsl");
             _shader = global::renderEngine->buildRenderProgram(
-                "AdvancedRingsProgram",
-                absPath("${MODULE_GLOBEBROWSING}/shaders/advanced_rings_vs.glsl"),
+                _gpuSupportsDouble ? "AdvancedRingsProgram" : "AdvancedRingsProgramFloat",
+                vs,
                 absPath("${MODULE_GLOBEBROWSING}/shaders/advanced_rings_fs.glsl"),
                 dict
             );
 
-            opengl::updateUniformLocations(*_shader, _uniformCacheAdvancedRings);
+            if (_gpuSupportsDouble) {
+                opengl::updateUniformLocations(*_shader, _uniformCacheAdvancedRings);
+            }
+            else {
+                opengl::updateUniformLocations(*_shader, _uniformCacheAdvancedRingsFloat);
+            }
         }
         else {
             // Uses simple texture for the Rings
+            const std::filesystem::path vs = _gpuSupportsDouble ?
+                absPath("${MODULE_GLOBEBROWSING}/shaders/rings_vs.glsl") :
+                absPath("${MODULE_GLOBEBROWSING}/shaders/rings_vs_float.glsl");
             _shader = global::renderEngine->buildRenderProgram(
-                "RingsProgram",
-                absPath("${MODULE_GLOBEBROWSING}/shaders/rings_vs.glsl"),
+                _gpuSupportsDouble ? "RingsProgram" : "RingsProgramFloat",
+                vs,
                 absPath("${MODULE_GLOBEBROWSING}/shaders/rings_fs.glsl"),
                 dict
             );
 
-            opengl::updateUniformLocations(*_shader, _uniformCache);
+            if (_gpuSupportsDouble) {
+                opengl::updateUniformLocations(*_shader, _uniformCache);
+            }
+            else {
+                opengl::updateUniformLocations(*_shader, _uniformCacheFloat);
+            }
         }
     }
     catch (const RuntimeError& e) {

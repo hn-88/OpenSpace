@@ -492,6 +492,16 @@ RenderableOrbitalKepler::RenderableOrbitalKepler(const Dictionary& dict)
 }
 
 void RenderableOrbitalKepler::initializeGL() {
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Kepler shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
     glCreateBuffers(1, &_vertexBuffer);
     glCreateVertexArrays(1, &_vertexArray);
     glVertexArrayVertexBuffer(_vertexArray, 0, _vertexBuffer, 0, sizeof(TrailVBOLayout));
@@ -501,42 +511,85 @@ void RenderableOrbitalKepler::initializeGL() {
     glVertexArrayAttribBinding(_vertexArray, 0, 0);
 
     glEnableVertexArrayAttrib(_vertexArray, 1);
-    glVertexArrayAttribLFormat(
-        _vertexArray,
-        1,
-        3,
-        GL_DOUBLE,
-        offsetof(TrailVBOLayout, time)
-    );
+    if (_gpuSupportsDouble) {
+        glVertexArrayAttribLFormat(
+            _vertexArray,
+            1,
+            3,
+            GL_DOUBLE,
+            offsetof(TrailVBOLayout, time)
+        );
+    }
+    else {
+        glVertexArrayAttribFormat(
+            _vertexArray,
+            1,
+            3,
+            GL_DOUBLE,
+            GL_FALSE,
+            offsetof(TrailVBOLayout, time)
+        );
+    }
     glVertexArrayAttribBinding(_vertexArray, 1, 0);
 
-    // Program for line rendering
-    _trailProgram = SpaceModule::ProgramObjectManager.request(
-        "OrbitalKeplerTrails",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-           return global::renderEngine->buildRenderProgram(
-               "OrbitalKeplerTrails",
-               absPath("${MODULE_SPACE}/shaders/keplertrails_vs.glsl"),
-               absPath("${MODULE_SPACE}/shaders/keplertrails_fs.glsl")
-           );
-        }
-   );
+    if (_gpuSupportsDouble) {
+        // Program for line rendering
+        _trailProgram = SpaceModule::ProgramObjectManager.request(
+            "OrbitalKeplerTrails",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+               return global::renderEngine->buildRenderProgram(
+                   "OrbitalKeplerTrails",
+                   absPath("${MODULE_SPACE}/shaders/keplertrails_vs.glsl"),
+                   absPath("${MODULE_SPACE}/shaders/keplertrails_fs.glsl")
+               );
+            }
+        );
 
-    // Program for point rendering
-    _pointProgram = SpaceModule::ProgramObjectManager.request(
-        "OrbitalKeplerPoints",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-            return global::renderEngine->buildRenderProgram(
-                "OrbitalKeplerPoints",
-                absPath("${MODULE_SPACE}/shaders/keplerpoints_vs.glsl"),
-                absPath("${MODULE_SPACE}/shaders/keplerpoints_fs.glsl"),
-                absPath("${MODULE_SPACE}/shaders/keplerpoints_gs.glsl")
-            );
-        }
-    );
+        // Program for point rendering
+        _pointProgram = SpaceModule::ProgramObjectManager.request(
+            "OrbitalKeplerPoints",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "OrbitalKeplerPoints",
+                    absPath("${MODULE_SPACE}/shaders/keplerpoints_vs.glsl"),
+                    absPath("${MODULE_SPACE}/shaders/keplerpoints_fs.glsl"),
+                    absPath("${MODULE_SPACE}/shaders/keplerpoints_gs.glsl")
+                );
+            }
+        );
 
-    opengl::updateUniformLocations(*_trailProgram, _uniformTrailCache);
-    opengl::updateUniformLocations(*_pointProgram, _uniformPointCache);
+        opengl::updateUniformLocations(*_trailProgram, _uniformTrailCache);
+        opengl::updateUniformLocations(*_pointProgram, _uniformPointCache);
+    }
+    else {
+        // Program for line rendering (float)
+        _trailProgram = SpaceModule::ProgramObjectManager.request(
+            "OrbitalKeplerTrailsFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+               return global::renderEngine->buildRenderProgram(
+                   "OrbitalKeplerTrailsFloat",
+                   absPath("${MODULE_SPACE}/shaders/keplertrails_vs_float.glsl"),
+                   absPath("${MODULE_SPACE}/shaders/keplertrails_fs.glsl")
+               );
+            }
+        );
+
+        // Program for point rendering (float)
+        _pointProgram = SpaceModule::ProgramObjectManager.request(
+            "OrbitalKeplerPointsFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "OrbitalKeplerPointsFloat",
+                    absPath("${MODULE_SPACE}/shaders/keplerpoints_vs_float.glsl"),
+                    absPath("${MODULE_SPACE}/shaders/keplerpoints_fs.glsl"),
+                    absPath("${MODULE_SPACE}/shaders/keplerpoints_gs_float.glsl")
+                );
+            }
+        );
+
+        opengl::updateUniformLocations(*_trailProgram, _uniformTrailCacheFloat);
+        opengl::updateUniformLocations(*_pointProgram, _uniformPointCacheFloat);
+    }
 
     _updateDataBuffersAtNextRender = true;
 }
@@ -545,15 +598,20 @@ void RenderableOrbitalKepler::deinitializeGL() {
     glDeleteBuffers(1, &_vertexBuffer);
     glDeleteVertexArrays(1, &_vertexArray);
 
+    const std::string trailName =
+        _gpuSupportsDouble ? "OrbitalKeplerTrails" : "OrbitalKeplerTrailsFloat";
+    const std::string pointName =
+        _gpuSupportsDouble ? "OrbitalKeplerPoints" : "OrbitalKeplerPointsFloat";
+
     SpaceModule::ProgramObjectManager.release(
-        "OrbitalKeplerTrails",
+        trailName,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
     );
 
     SpaceModule::ProgramObjectManager.release(
-        "OrbitalKeplerPoints",
+        pointName,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
@@ -618,62 +676,122 @@ void RenderableOrbitalKepler::render(const RenderData& data, RendererTasks&) {
         );
 
         _pointProgram->activate();
-        _pointProgram->setUniform(
-            _uniformPointCache.modelTransform,
-            calcModelTransform(data)
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.viewTransform,
-            data.camera.combinedViewMatrix()
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.projectionTransform,
-            data.camera.projectionMatrix()
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.renderOption,
-            _appearance.pointRenderOption
-        );
-        _pointProgram->setUniform(_uniformPointCache.cameraViewDirectionUp, orthoUp);
-        _pointProgram->setUniform(
-            _uniformPointCache.cameraViewDirectionRight,
-            orthoRight
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.cameraPositionWorld,
-            data.camera.position()
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.cameraUpWorld,
-            static_cast<glm::vec3>(data.camera.lookUpVectorWorldSpace())
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.inGameTime,
-            data.time.j2000Seconds()
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.pointSizeExponent,
-            _appearance.pointSizeExponent
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.enableMaxSize,
-            _appearance.enableMaxSize
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.enableOutline,
-            _appearance.enableOutline
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.outlineColor,
-            _appearance.outlineColor
-        );
-        _pointProgram->setUniform(
-            _uniformPointCache.outlineWeight,
-            _appearance.outlineWidth
-        );
-        _pointProgram->setUniform(_uniformPointCache.color, _appearance.color);
-        _pointProgram->setUniform(_uniformPointCache.maxSize, _appearance.maxSize);
-        _pointProgram->setUniform(_uniformPointCache.opacity, opacity());
+        if (_gpuSupportsDouble) {
+            _pointProgram->setUniform(
+                _uniformPointCache.modelTransform,
+                calcModelTransform(data)
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.viewTransform,
+                data.camera.combinedViewMatrix()
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.projectionTransform,
+                data.camera.projectionMatrix()
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.renderOption,
+                _appearance.pointRenderOption
+            );
+            _pointProgram->setUniform(_uniformPointCache.cameraViewDirectionUp, orthoUp);
+            _pointProgram->setUniform(
+                _uniformPointCache.cameraViewDirectionRight,
+                orthoRight
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.cameraPositionWorld,
+                data.camera.position()
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.cameraUpWorld,
+                static_cast<glm::vec3>(data.camera.lookUpVectorWorldSpace())
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.inGameTime,
+                data.time.j2000Seconds()
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.pointSizeExponent,
+                _appearance.pointSizeExponent
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.enableMaxSize,
+                _appearance.enableMaxSize
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.enableOutline,
+                _appearance.enableOutline
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.outlineColor,
+                _appearance.outlineColor
+            );
+            _pointProgram->setUniform(
+                _uniformPointCache.outlineWeight,
+                _appearance.outlineWidth
+            );
+            _pointProgram->setUniform(_uniformPointCache.color, _appearance.color);
+            _pointProgram->setUniform(_uniformPointCache.maxSize, _appearance.maxSize);
+            _pointProgram->setUniform(_uniformPointCache.opacity, opacity());
+        }
+        else {
+            const auto [mHi, mLo] = splitDmat4(calcModelTransform(data));
+            const auto [vHi, vLo] = splitDmat4(data.camera.combinedViewMatrix());
+            const auto [camHi, camLo] = splitDvec3(data.camera.position());
+            _pointProgram->setUniform(_uniformPointCacheFloat.modelTransform_hi, mHi);
+            _pointProgram->setUniform(_uniformPointCacheFloat.modelTransform_lo, mLo);
+            _pointProgram->setUniform(_uniformPointCacheFloat.viewTransform_hi, vHi);
+            _pointProgram->setUniform(_uniformPointCacheFloat.viewTransform_lo, vLo);
+            _pointProgram->setUniform(_uniformPointCacheFloat.cameraPositionWorld_hi, camHi);
+            _pointProgram->setUniform(_uniformPointCacheFloat.cameraPositionWorld_lo, camLo);
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.inGameTime,
+                static_cast<float>(data.time.j2000Seconds())
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.projectionTransform,
+                data.camera.projectionMatrix()
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.renderOption,
+                _appearance.pointRenderOption
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.cameraViewDirectionUp,
+                orthoUp
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.cameraViewDirectionRight,
+                orthoRight
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.cameraUpWorld,
+                static_cast<glm::vec3>(data.camera.lookUpVectorWorldSpace())
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.pointSizeExponent,
+                _appearance.pointSizeExponent
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.enableMaxSize,
+                _appearance.enableMaxSize
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.enableOutline,
+                _appearance.enableOutline
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.outlineColor,
+                _appearance.outlineColor
+            );
+            _pointProgram->setUniform(
+                _uniformPointCacheFloat.outlineWeight,
+                _appearance.outlineWidth
+            );
+            _pointProgram->setUniform(_uniformPointCacheFloat.color, _appearance.color);
+            _pointProgram->setUniform(_uniformPointCacheFloat.maxSize, _appearance.maxSize);
+            _pointProgram->setUniform(_uniformPointCacheFloat.opacity, opacity());
+        }
 
         glBindVertexArray(_vertexArray);
         glMultiDrawArrays(
@@ -689,32 +807,45 @@ void RenderableOrbitalKepler::render(const RenderData& data, RendererTasks&) {
 
     if (_renderTrails) {
         _trailProgram->activate();
-        _trailProgram->setUniform(_uniformTrailCache.opacity, opacity());
-        _trailProgram->setUniform(_uniformTrailCache.color, _appearance.color);
-        _trailProgram->setUniform(
-            _uniformTrailCache.inGameTime,
-            data.time.j2000Seconds()
-        );
-        _trailProgram->setUniform(
-            _uniformTrailCache.modelViewTransform,
-            calcModelViewTransform(data)
-        );
-        _trailProgram->setUniform(
-            _uniformTrailCache.projectionTransform,
-            data.camera.projectionMatrix()
-        );
-
-        // Because we want the property to work similar to the planet trails
         const float fade = std::pow(
             _appearance.trailFade.maxValue() - _appearance.trailFade, 2.f
         );
-        _trailProgram->setUniform(_uniformTrailCache.trailFadeExponent, fade);
 
-        // 0.05 is the "alpha value" for which the trail should no longer be rendered. The
-        // value that's compared to 0.05 is calculated in the shader and depends on the
-        // distance from the head of the trail to the part that's being rendered. Value is
-        // passed as uniform due to it being used in both geometry and fragment shader
-        _trailProgram->setUniform(_uniformTrailCache.colorFadeCutoffValue, 0.05f);
+        if (_gpuSupportsDouble) {
+            _trailProgram->setUniform(_uniformTrailCache.opacity, opacity());
+            _trailProgram->setUniform(_uniformTrailCache.color, _appearance.color);
+            _trailProgram->setUniform(
+                _uniformTrailCache.inGameTime,
+                data.time.j2000Seconds()
+            );
+            _trailProgram->setUniform(
+                _uniformTrailCache.modelViewTransform,
+                calcModelViewTransform(data)
+            );
+            _trailProgram->setUniform(
+                _uniformTrailCache.projectionTransform,
+                data.camera.projectionMatrix()
+            );
+            _trailProgram->setUniform(_uniformTrailCache.trailFadeExponent, fade);
+            _trailProgram->setUniform(_uniformTrailCache.colorFadeCutoffValue, 0.05f);
+        }
+        else {
+            const auto [mvHi, mvLo] = splitDmat4(calcModelViewTransform(data));
+            _trailProgram->setUniform(_uniformTrailCacheFloat.opacity, opacity());
+            _trailProgram->setUniform(_uniformTrailCacheFloat.color, _appearance.color);
+            _trailProgram->setUniform(
+                _uniformTrailCacheFloat.inGameTime,
+                static_cast<float>(data.time.j2000Seconds())
+            );
+            _trailProgram->setUniform(_uniformTrailCacheFloat.modelViewTransform_hi, mvHi);
+            _trailProgram->setUniform(_uniformTrailCacheFloat.modelViewTransform_lo, mvLo);
+            _trailProgram->setUniform(
+                _uniformTrailCacheFloat.projectionTransform,
+                data.camera.projectionMatrix()
+            );
+            _trailProgram->setUniform(_uniformTrailCacheFloat.trailFadeExponent, fade);
+            _trailProgram->setUniform(_uniformTrailCacheFloat.colorFadeCutoffValue, 0.05f);
+        }
 
         glLineWidth(_appearance.trailWidth);
 

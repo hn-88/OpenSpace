@@ -24,6 +24,8 @@
 
 #include <modules/space/rendering/renderablefluxnodes.h>
 
+#include <openspace/util/nogpudouble.h>
+
 #include <openspace/documentation/documentation.h>
 #include <openspace/engine/globals.h>
 #include <openspace/engine/windowdelegate.h>
@@ -473,11 +475,28 @@ void RenderableFluxNodes::initialize() {
 }
 
 void RenderableFluxNodes::initializeGL() {
-    _shaderProgram = global::renderEngine->buildRenderProgram(
-        "Fluxnodes",
-        absPath("${MODULE_SPACE}/shaders/fluxnodes_vs.glsl"),
-        absPath("${MODULE_SPACE}/shaders/fluxnodes_fs.glsl")
-    );
+    const EnvCheckResult env = checkNoGpuDoubleEnv();
+    _gpuSupportsDouble = !env.enabled;
+
+    if (_gpuSupportsDouble) {
+        LINFO("NO_GPU_DOUBLE environment variable is not set. RenderableFluxNodes will use original double-precision shaders (fluxnodes_vs.glsl).");
+        _shaderProgram = global::renderEngine->buildRenderProgram(
+            "Fluxnodes",
+            absPath("${MODULE_SPACE}/shaders/fluxnodes_vs.glsl"),
+            absPath("${MODULE_SPACE}/shaders/fluxnodes_fs.glsl")
+        );
+    }
+    else {
+        LINFO(std::format(
+            "Environment variable {}='{}' detected. RenderableFluxNodes will use float workaround shaders (fluxnodes_vs_float.glsl).",
+            env.varName, env.value
+        ));
+        _shaderProgram = global::renderEngine->buildRenderProgram(
+            "Fluxnodes",
+            absPath("${MODULE_SPACE}/shaders/fluxnodes_vs_float.glsl"),
+            absPath("${MODULE_SPACE}/shaders/fluxnodes_fs.glsl")
+        );
+    }
 
     _uniformCache.streamColor = _shaderProgram->uniformLocation("streamColor");
     _uniformCache.nodeSize = _shaderProgram->uniformLocation("nodeSize");
@@ -802,10 +821,18 @@ void RenderableFluxNodes::render(const RenderData& data, RendererTasks&) {
     _shaderProgram->setUniform(_uniformCache.earthPos, earthPos);
     _shaderProgram->setUniform(_uniformCache.distanceThreshold, _distanceThreshold);
     _shaderProgram->setUniform(_uniformCache.proximityNodesSize, _proximityNodesSize);
-    _shaderProgram->setUniform(
-        _uniformCache.time,
-        global::windowDelegate->applicationTime()
-    );
+    if (_gpuSupportsDouble) {
+        _shaderProgram->setUniform(
+            _uniformCache.time,
+            global::windowDelegate->applicationTime()
+        );
+    }
+    else {
+        _shaderProgram->setUniform(
+            _uniformCache.time,
+            static_cast<float>(global::windowDelegate->applicationTime())
+        );
+    }
     _shaderProgram->setUniform(_uniformCache.maxNodeDistanceSize, _maxNodeDistanceSize);
     _shaderProgram->setUniform(
         _uniformCache.usingCameraPerspective,

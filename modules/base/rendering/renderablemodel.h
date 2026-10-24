@@ -36,6 +36,7 @@
 #include <openspace/properties/scalar/floatproperty.h>
 #include <openspace/properties/vector/vec3property.h>
 #include <openspace/properties/vector/vec4property.h>
+#include <openspace/util/nogpudouble.h>
 #include <memory>
 
 namespace openspace {
@@ -105,6 +106,7 @@ private:
     std::filesystem::path _vertexShaderPath;
     std::filesystem::path _fragmentShaderPath;
     opengl::ProgramObject* _program = nullptr;
+    bool _gpuSupportsDouble = true;
     UniformCache(modelViewTransform, projectionTransform, normalTransform, meshTransform,
         meshNormalTransform, ambientIntensity, diffuseIntensity, specularIntensity,
         specularPower, performShading, use_forced_color, has_texture_diffuse,
@@ -114,6 +116,16 @@ private:
         gBufferDepthTexture, resolution, has_shadow_depth_map, model, light_vp,
         shadow_depth_map, has_override_color, override_color
     ) _uniformCache;
+
+    UniformCache(modelViewTransform, projectionTransform, normalTransform, meshTransform,
+        meshNormalTransform, ambientIntensity, diffuseIntensity, specularIntensity,
+        specularPower, performShading, use_forced_color, has_texture_diffuse,
+        has_texture_normal, has_texture_specular, has_color_specular, texture_diffuse,
+        texture_normal, texture_specular, color_diffuse, color_specular, opacity,
+        nLightSources, lightDirectionsViewSpace, lightIntensities, performManualDepthTest,
+        gBufferDepthTexture, resolution, has_shadow_depth_map, model_hi, model_lo,
+        light_vp_hi, light_vp_lo, shadow_depth_map, has_override_color, override_color
+    ) _uniformCacheFloat;
 
     std::vector<std::unique_ptr<LightSource>> _lightSources;
 

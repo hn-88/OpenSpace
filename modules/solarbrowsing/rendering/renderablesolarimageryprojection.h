@@ -57,6 +57,7 @@ private:
     std::vector<std::string> _solarImageryDependencyNames;
     opengl::ProgramObject* _shader  = nullptr;
     Sphere _sphere;
+    bool _gpuSupportsDouble = true;
 };
 
 } // namespace openspace

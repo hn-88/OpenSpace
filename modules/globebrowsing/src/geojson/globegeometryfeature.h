@@ -223,6 +223,7 @@ private:
 
     opengl::ProgramObject* _linesAndPolygonsProgram = nullptr;
     opengl::ProgramObject* _pointsProgram = nullptr;
+    bool _gpuSupportsDouble = true;
 };
 
 } // namespace openspace

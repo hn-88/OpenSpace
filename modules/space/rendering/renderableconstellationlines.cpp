@@ -24,6 +24,8 @@
 
 #include <modules/space/rendering/renderableconstellationlines.h>
 
+#include <openspace/util/nogpudouble.h>
+
 #include <openspace/data/dataloader.h>
 #include <openspace/documentation/documentation.h>
 #include <openspace/engine/globals.h>
@@ -226,13 +228,32 @@ void RenderableConstellationLines::initialize() {
 }
 
 void RenderableConstellationLines::initializeGL() {
-    _program = global::renderEngine->buildRenderProgram(
-        "RenderableConstellationLines",
-        absPath("${MODULE_SPACE}/shaders/constellationlines_vs.glsl"),
-        absPath("${MODULE_SPACE}/shaders/constellationlines_fs.glsl")
-    );
+    const EnvCheckResult env = checkNoGpuDoubleEnv();
+    _gpuSupportsDouble = !env.enabled;
 
-    opengl::updateUniformLocations(*_program, _uniformCache);
+    if (_gpuSupportsDouble) {
+        LINFO("NO_GPU_DOUBLE environment variable is not set. RenderableConstellationLines will use original double-precision shaders (constellationlines_vs.glsl).");
+        _program = global::renderEngine->buildRenderProgram(
+            "RenderableConstellationLines",
+            absPath("${MODULE_SPACE}/shaders/constellationlines_vs.glsl"),
+            absPath("${MODULE_SPACE}/shaders/constellationlines_fs.glsl")
+        );
+        opengl::updateUniformLocations(*_program, _uniformCacheCommon);
+        opengl::updateUniformLocations(*_program, _uniformCacheDouble);
+    }
+    else {
+        LINFO(std::format(
+            "Environment variable {}='{}' detected. RenderableConstellationLines will use float workaround shaders (constellationlines_vs_float.glsl).",
+            env.varName, env.value
+        ));
+        _program = global::renderEngine->buildRenderProgram(
+            "RenderableConstellationLines",
+            absPath("${MODULE_SPACE}/shaders/constellationlines_vs_float.glsl"),
+            absPath("${MODULE_SPACE}/shaders/constellationlines_fs.glsl")
+        );
+        opengl::updateUniformLocations(*_program, _uniformCacheCommon);
+        opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+    }
 
     createConstellations();
 }
@@ -261,9 +282,17 @@ void RenderableConstellationLines::renderConstellations(const RenderData&,
 
     _program->activate();
 
-    _program->setUniform(_uniformCache.modelViewTransform, modelViewMatrix);
-    _program->setUniform(_uniformCache.projectionTransform, projectionMatrix);
-    _program->setUniform(_uniformCache.opacity, opacity());
+    if (_gpuSupportsDouble) {
+        _program->setUniform(_uniformCacheDouble.modelViewTransform, modelViewMatrix);
+        _program->setUniform(_uniformCacheDouble.projectionTransform, projectionMatrix);
+    }
+    else {
+        auto [mv_hi, mv_lo] = splitDmat4(modelViewMatrix);
+        _program->setUniform(_uniformCacheFloat.modelViewTransform_hi, mv_hi);
+        _program->setUniform(_uniformCacheFloat.modelViewTransform_lo, mv_lo);
+        _program->setUniform(_uniformCacheFloat.projectionTransform, glm::mat4(projectionMatrix));
+    }
+    _program->setUniform(_uniformCacheCommon.opacity, opacity());
 
     using ConstellationKeyValuePair = std::pair<const int, ConstellationLine>;
     for (const ConstellationKeyValuePair& pair : _renderingConstellationsMap)
@@ -273,7 +302,7 @@ void RenderableConstellationLines::renderConstellations(const RenderData&,
         }
 
         _program->setUniform(
-            _uniformCache.color,
+            _uniformCacheCommon.color,
             _constellationColorMap[pair.second.colorIndex]
         );
 

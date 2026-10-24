@@ -272,23 +272,47 @@ void RenderableTrail::initialize() {
 void RenderableTrail::initializeGL() {
     ZoneScoped;
 
-    _programObject = BaseModule::ProgramObjectManager.request(
-        "EphemerisProgram",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-            return global::renderEngine->buildRenderProgram(
-                "EphemerisProgram",
-                absPath("${MODULE_BASE}/shaders/renderabletrail_vs.glsl"),
-                absPath("${MODULE_BASE}/shaders/renderabletrail_fs.glsl")
-            );
-        }
-    );
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Trail shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
 
-    opengl::updateUniformLocations(*_programObject, _uniformCache);
+    if (_gpuSupportsDouble) {
+        _programObject = BaseModule::ProgramObjectManager.request(
+            "EphemerisProgram",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "EphemerisProgram",
+                    absPath("${MODULE_BASE}/shaders/renderabletrail_vs.glsl"),
+                    absPath("${MODULE_BASE}/shaders/renderabletrail_fs.glsl")
+                );
+            }
+        );
+        opengl::updateUniformLocations(*_programObject, _uniformCache);
+    }
+    else {
+        _programObject = BaseModule::ProgramObjectManager.request(
+            "EphemerisProgramFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "EphemerisProgramFloat",
+                    absPath("${MODULE_BASE}/shaders/renderabletrail_vs_float.glsl"),
+                    absPath("${MODULE_BASE}/shaders/renderabletrail_fs_float.glsl")
+                );
+            }
+        );
+        opengl::updateUniformLocations(*_programObject, _uniformCacheFloat);
+    }
 }
 
 void RenderableTrail::deinitializeGL() {
     BaseModule::ProgramObjectManager.release(
-        "EphemerisProgram",
+        _gpuSupportsDouble ? "EphemerisProgram" : "EphemerisProgramFloat",
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
@@ -321,10 +345,17 @@ void RenderableTrail::internalRender(bool renderLines, bool renderPoints,
     // precision for vertices; especially for the trails, a high vertex precision is
     // necessary as they are usually far away from their reference
     const glm::dmat4 modelViewTransform = calcModelViewTransform(data, modelTransform);
-    _programObject->setUniform(
-        _uniformCache.modelViewTransform,
-        modelViewTransform * info._localTransform
-    );
+    if (_gpuSupportsDouble) {
+        _programObject->setUniform(
+            _uniformCache.modelViewTransform,
+            modelViewTransform * info._localTransform
+        );
+    }
+    else {
+        const auto [mvHi, mvLo] = splitDmat4(modelViewTransform * info._localTransform);
+        _programObject->setUniform(_uniformCacheFloat.modelViewTransform_hi, mvHi);
+        _programObject->setUniform(_uniformCacheFloat.modelViewTransform_lo, mvLo);
+    }
 
     const int sorting = [](RenderInformation::VertexSorting s) {
         switch (s) {

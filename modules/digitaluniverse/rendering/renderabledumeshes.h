@@ -36,6 +36,7 @@
 #include <openspace/properties/vector/ivec2property.h>
 #include <openspace/properties/vector/vec3property.h>
 #include <openspace/util/distanceconversion.h>
+#include <openspace/util/nogpudouble.h>
 #include <filesystem>
 #include <memory>
 #include <unordered_map>
@@ -112,8 +113,11 @@ private:
     OptionProperty _renderOption;
 
     opengl::ProgramObject* _program = nullptr;
+    bool _gpuSupportsDouble = true;
     UniformCache(modelViewTransform, projectionTransform, alphaValue,
         color) _uniformCache;
+    UniformCache(modelViewTransform_hi, modelViewTransform_lo, projectionTransform,
+        alphaValue, color) _uniformCacheFloat;
     std::shared_ptr<fontrendering::Font> _font = nullptr;
 
     std::filesystem::path _speckFile;

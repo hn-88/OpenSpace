@@ -300,16 +300,40 @@ std::string RenderableNodeLine::end() const {
 }
 
 void RenderableNodeLine::initializeGL() {
-    _program = BaseModule::ProgramObjectManager.request(
-        "NodeLineProgram",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-            return global::renderEngine->buildRenderProgram(
-                "NodeLineProgram",
-                absPath("${MODULE_BASE}/shaders/line_vs.glsl"),
-                absPath("${MODULE_BASE}/shaders/line_fs.glsl")
-            );
-        }
-    );
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Line shaders.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
+    if (_gpuSupportsDouble) {
+        _program = BaseModule::ProgramObjectManager.request(
+            "NodeLineProgram",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "NodeLineProgram",
+                    absPath("${MODULE_BASE}/shaders/line_vs.glsl"),
+                    absPath("${MODULE_BASE}/shaders/line_fs.glsl")
+                );
+            }
+        );
+    }
+    else {
+        _program = BaseModule::ProgramObjectManager.request(
+            "NodeLineProgramFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "NodeLineProgramFloat",
+                    absPath("${MODULE_BASE}/shaders/line_vs_float.glsl"),
+                    absPath("${MODULE_BASE}/shaders/line_fs.glsl")
+                );
+            }
+        );
+    }
 
     glCreateBuffers(1, &_vbo);
     glNamedBufferStorage(_vbo, 2 * sizeof(Vertex), nullptr, GL_DYNAMIC_STORAGE_BIT);
@@ -327,7 +351,7 @@ void RenderableNodeLine::deinitializeGL() {
     glDeleteBuffers(1, &_vbo);
 
     BaseModule::ProgramObjectManager.release(
-        "NodeLineProgram",
+        _gpuSupportsDouble ? "NodeLineProgram" : "NodeLineProgramFloat",
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }

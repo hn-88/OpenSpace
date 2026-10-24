@@ -123,23 +123,32 @@ source_group("Source Files" FILES ${SOURCE_FILES})
 
 set(SHADER_FILES
   shaders/advanced_rings_vs.glsl
+  shaders/advanced_rings_vs_float.glsl
   shaders/advanced_rings_fs.glsl
   shaders/blending.glsl
+  shaders/df64.glsl
   shaders/ellipsoid.glsl
   shaders/geojson_fs.glsl
   shaders/geojson_points_fs.glsl
   shaders/geojson_points_gs.glsl
+  shaders/geojson_points_gs_float.glsl
   shaders/geojson_points_vs.glsl
   shaders/geojson_vs.glsl
+  shaders/geojson_vs_float.glsl
   shaders/globalrenderer_vs.glsl
+  shaders/globalrenderer_vs_float.glsl
   shaders/interpolate_fs.glsl
   shaders/interpolate_vs.glsl
   shaders/localrenderer_vs.glsl
+  shaders/localrenderer_vs_float.glsl
   shaders/renderer_fs.glsl
+  shaders/renderer_fs_float.glsl
   shaders/rings_fs.glsl
   shaders/rings_geom_fs.glsl
   shaders/rings_geom_vs.glsl
+  shaders/rings_geom_vs_float.glsl
   shaders/rings_vs.glsl
+  shaders/rings_vs_float.glsl
   shaders/texturetilemapping.glsl
   shaders/tile.glsl
   shaders/tileheight.glsl

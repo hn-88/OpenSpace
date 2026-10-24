@@ -52,6 +52,7 @@
 #include <openspace/systemcapabilities/openglcapabilitiescomponent.h>
 #include <openspace/util/geodetic.h>
 #include <openspace/util/memorymanager.h>
+#include <openspace/util/nogpudouble.h>
 #include <openspace/util/spicemanager.h>
 #include <openspace/util/time.h>
 #include <openspace/util/updatestructures.h>
@@ -901,6 +902,11 @@ RenderableGlobe::RenderableGlobe(const Dictionary& dictionary)
 }
 
 void RenderableGlobe::initializeGL() {
+    _gpuSupportsDouble = !checkNoGpuDoubleEnv();
+    if (!_gpuSupportsDouble) {
+        LINFO("NO_GPU_DOUBLE environment variable detected. Using float shaders for RenderableGlobe.");
+    }
+
     if (!_labelsDictionary.isEmpty()) {
         _globeLabelsComponent.initialize(_labelsDictionary, this);
     }
@@ -1550,15 +1556,47 @@ void RenderableGlobe::renderChunkGlobally(const Chunk& chunk, const RenderData& 
     }
 
     if (!_shadowers.empty() && _shadowersOk) {
-        program.setUniform("inverseView", glm::inverse(data.camera.combinedViewMatrix()));
-        program.setUniform("lightDepthMaps", boundUnits);
-        GLint loc = glGetUniformLocation(program, "lightView");
-        glUniformMatrix4dv(
-            loc,
-            static_cast<GLsizei>(lightViewProjections.size()),
-            GL_FALSE,
-            glm::value_ptr(lightViewProjections.front())
-        );
+        if (_gpuSupportsDouble) {
+            program.setUniform("inverseView", glm::inverse(data.camera.combinedViewMatrix()));
+            program.setUniform("lightDepthMaps", boundUnits);
+            GLint loc = glGetUniformLocation(program, "lightView");
+            glUniformMatrix4dv(
+                loc,
+                static_cast<GLsizei>(lightViewProjections.size()),
+                GL_FALSE,
+                glm::value_ptr(lightViewProjections.front())
+            );
+        }
+        else {
+            glm::mat4 inv_hi, inv_lo;
+            splitDmat4(glm::inverse(data.camera.combinedViewMatrix()), inv_hi, inv_lo);
+            program.setUniform("inverseView_hi", inv_hi);
+            program.setUniform("inverseView_lo", inv_lo);
+            program.setUniform("lightDepthMaps", boundUnits);
+            std::vector<glm::mat4> lv_hi(lightViewProjections.size());
+            std::vector<glm::mat4> lv_lo(lightViewProjections.size());
+            for (size_t i = 0; i < lightViewProjections.size(); ++i) {
+                splitDmat4(lightViewProjections[i], lv_hi[i], lv_lo[i]);
+            }
+            GLint loc_hi = glGetUniformLocation(program, "lightView_hi");
+            if (loc_hi >= 0 && !lv_hi.empty()) {
+                glUniformMatrix4fv(
+                    loc_hi,
+                    static_cast<GLsizei>(lv_hi.size()),
+                    GL_FALSE,
+                    glm::value_ptr(lv_hi.front())
+                );
+            }
+            GLint loc_lo = glGetUniformLocation(program, "lightView_lo");
+            if (loc_lo >= 0 && !lv_lo.empty()) {
+                glUniformMatrix4fv(
+                    loc_lo,
+                    static_cast<GLsizei>(lv_lo.size()),
+                    GL_FALSE,
+                    glm::value_ptr(lv_lo.front())
+                );
+            }
+        }
     }
 
     // The length of the skirts is proportional to its size
@@ -1775,18 +1813,50 @@ void RenderableGlobe::renderChunkLocally(const Chunk& chunk, const RenderData& d
     }
 
     if (!_shadowers.empty() && _shadowersOk) {
-        _localRenderer.program->setUniform(
-            "inverseView",
-            glm::inverse(data.camera.combinedViewMatrix())
-        );
-        _localRenderer.program->setUniform("lightDepthMaps", boundUnits);
-        GLint loc = glGetUniformLocation(*_localRenderer.program, "lightView");
-        glUniformMatrix4dv(
-            loc,
-            static_cast<GLsizei>(lightViewProjections.size()),
-            GL_FALSE,
-            glm::value_ptr(lightViewProjections.front())
-        );
+        if (_gpuSupportsDouble) {
+            _localRenderer.program->setUniform(
+                "inverseView",
+                glm::inverse(data.camera.combinedViewMatrix())
+            );
+            _localRenderer.program->setUniform("lightDepthMaps", boundUnits);
+            GLint loc = glGetUniformLocation(*_localRenderer.program, "lightView");
+            glUniformMatrix4dv(
+                loc,
+                static_cast<GLsizei>(lightViewProjections.size()),
+                GL_FALSE,
+                glm::value_ptr(lightViewProjections.front())
+            );
+        }
+        else {
+            glm::mat4 inv_hi, inv_lo;
+            splitDmat4(glm::inverse(data.camera.combinedViewMatrix()), inv_hi, inv_lo);
+            _localRenderer.program->setUniform("inverseView_hi", inv_hi);
+            _localRenderer.program->setUniform("inverseView_lo", inv_lo);
+            _localRenderer.program->setUniform("lightDepthMaps", boundUnits);
+            std::vector<glm::mat4> lv_hi(lightViewProjections.size());
+            std::vector<glm::mat4> lv_lo(lightViewProjections.size());
+            for (size_t i = 0; i < lightViewProjections.size(); ++i) {
+                splitDmat4(lightViewProjections[i], lv_hi[i], lv_lo[i]);
+            }
+            GLint loc_hi = glGetUniformLocation(*_localRenderer.program, "lightView_hi");
+            if (loc_hi >= 0 && !lv_hi.empty()) {
+                glUniformMatrix4fv(
+                    loc_hi,
+                    static_cast<GLsizei>(lv_hi.size()),
+                    GL_FALSE,
+                    glm::value_ptr(lv_hi.front())
+                );
+            }
+            GLint loc_lo = glGetUniformLocation(*_localRenderer.program, "lightView_lo");
+            if (loc_lo >= 0 && !lv_lo.empty()) {
+                glUniformMatrix4fv(
+                    loc_lo,
+                    static_cast<GLsizei>(lv_lo.size()),
+                    GL_FALSE,
+                    glm::value_ptr(lv_lo.front())
+                );
+            }
+        }
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -1880,7 +1950,15 @@ void RenderableGlobe::setCommonUniforms(opengl::ProgramObject& programObject,
     // Used by local and global renderer, as well as GeoJSON
     using opengl::ProgramObject;
     programObject.setIgnoreUniformLocationError(ProgramObject::IgnoreError::Yes);
-    programObject.setUniform("modelTransform", _cachedModelTransform);
+    if (_gpuSupportsDouble) {
+        programObject.setUniform("modelTransform", _cachedModelTransform);
+    }
+    else {
+        glm::mat4 m_hi, m_lo;
+        splitDmat4(_cachedModelTransform, m_hi, m_lo);
+        programObject.setUniform("modelTransform_hi", m_hi);
+        programObject.setUniform("modelTransform_lo", m_lo);
+    }
     programObject.setIgnoreUniformLocationError(ProgramObject::IgnoreError::No);
 }
 
@@ -2067,9 +2145,13 @@ void RenderableGlobe::recompileShaders() {
     //
     global::renderEngine->removeRenderProgram(_localRenderer.program.get());
     _localRenderer.program = global::renderEngine->buildRenderProgram(
-        "LocalChunkedLodPatch",
-        absPath("${MODULE_GLOBEBROWSING}/shaders/localrenderer_vs.glsl"),
-        absPath("${MODULE_GLOBEBROWSING}/shaders/renderer_fs.glsl"),
+        _gpuSupportsDouble ? "LocalChunkedLodPatch" : "LocalChunkedLodPatchFloat",
+        _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/localrenderer_vs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/localrenderer_vs_float.glsl"),
+        _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/renderer_fs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/renderer_fs_float.glsl"),
         shaderDictionary
     );
     assert_msg(_localRenderer.program, "Failed to initialize programObject");
@@ -2085,9 +2167,13 @@ void RenderableGlobe::recompileShaders() {
     //
     global::renderEngine->removeRenderProgram(_globalRenderer.program.get());
     _globalRenderer.program = global::renderEngine->buildRenderProgram(
-        "GlobalChunkedLodPatch",
-        absPath("${MODULE_GLOBEBROWSING}/shaders/globalrenderer_vs.glsl"),
-        absPath("${MODULE_GLOBEBROWSING}/shaders/renderer_fs.glsl"),
+        _gpuSupportsDouble ? "GlobalChunkedLodPatch" : "GlobalChunkedLodPatchFloat",
+        _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/globalrenderer_vs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/globalrenderer_vs_float.glsl"),
+        _gpuSupportsDouble ?
+            absPath("${MODULE_GLOBEBROWSING}/shaders/renderer_fs.glsl") :
+            absPath("${MODULE_GLOBEBROWSING}/shaders/renderer_fs_float.glsl"),
         shaderDictionary
     );
     assert_msg(_globalRenderer.program, "Failed to initialize programObject");
@@ -2440,27 +2526,55 @@ void RenderableGlobe::calculateEclipseShadows(opengl::ProgramObject& programObje
         programObject.setUniform(std::format(NameIsShadowing, counter), sd.isShadowing);
 
         if (sd.isShadowing) {
-            programObject.setUniform(std::format(NameXp, counter), sd.xp);
-            programObject.setUniform(std::format(NameXu, counter), sd.xu);
-            programObject.setUniform(std::format(NameRc, counter), sd.rc);
+            programObject.setUniform(std::format(NameXp, counter), static_cast<float>(sd.xp));
+            programObject.setUniform(std::format(NameXu, counter), static_cast<float>(sd.xu));
+            programObject.setUniform(std::format(NameRc, counter), static_cast<float>(sd.rc));
             programObject.setUniform(
-                std::format(NameSource, counter), sd.sourceCasterVec
+                std::format(NameSource, counter), glm::vec3(sd.sourceCasterVec)
             );
-            programObject.setUniform(
-                std::format(NamePos, counter), sd.casterPositionVec
-            );
+            if (_gpuSupportsDouble) {
+                programObject.setUniform(
+                    std::format(NamePos, counter), sd.casterPositionVec
+                );
+            }
+            else {
+                constexpr std::string_view NamePosHi =
+                    "shadowDataArray[{}].casterPositionVec_hi";
+                constexpr std::string_view NamePosLo =
+                    "shadowDataArray[{}].casterPositionVec_lo";
+                glm::vec3 pos_hi, pos_lo;
+                splitDvec3(sd.casterPositionVec, pos_hi, pos_lo);
+                programObject.setUniform(std::format(NamePosHi, counter), pos_hi);
+                programObject.setUniform(std::format(NamePosLo, counter), pos_lo);
+            }
         }
         counter++;
     }
 
     if (stype == ShadowCompType::LOCAL_SHADOW) {
-        programObject.setUniform(
-            "inverseViewTransform",
-            glm::inverse(data.camera.combinedViewMatrix())
-        );
+        if (_gpuSupportsDouble) {
+            programObject.setUniform(
+                "inverseViewTransform",
+                glm::inverse(data.camera.combinedViewMatrix())
+            );
+        }
+        else {
+            glm::mat4 inv_hi, inv_lo;
+            splitDmat4(glm::inverse(data.camera.combinedViewMatrix()), inv_hi, inv_lo);
+            programObject.setUniform("inverseViewTransform_hi", inv_hi);
+            programObject.setUniform("inverseViewTransform_lo", inv_lo);
+        }
     }
     else if (stype == ShadowCompType::GLOBAL_SHADOW) {
-        programObject.setUniform("modelTransform", _cachedModelTransform);
+        if (_gpuSupportsDouble) {
+            programObject.setUniform("modelTransform", _cachedModelTransform);
+        }
+        else {
+            glm::mat4 m_hi, m_lo;
+            splitDmat4(_cachedModelTransform, m_hi, m_lo);
+            programObject.setUniform("modelTransform_hi", m_hi);
+            programObject.setUniform("modelTransform_lo", m_lo);
+        }
     }
 }
 

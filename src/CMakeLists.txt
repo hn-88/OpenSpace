@@ -384,6 +384,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/include/openspace/util/keys.h
     ${PROJECT_SOURCE_DIR}/include/openspace/util/memorymanager.h
     ${PROJECT_SOURCE_DIR}/include/openspace/util/mouse.h
+    ${PROJECT_SOURCE_DIR}/include/openspace/util/nogpudouble.h
     ${PROJECT_SOURCE_DIR}/include/openspace/util/openspacemodule.h
     ${PROJECT_SOURCE_DIR}/include/openspace/util/planegeometry.h
     ${PROJECT_SOURCE_DIR}/include/openspace/util/progressbar.h
@@ -808,7 +809,7 @@ target_include_directories(
   openspace-core SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/ext/renderdoc>
 )
 
-if (OPENSPACE_ENABLE_TRACY)
+if (TRACY_ENABLE)
   find_package(Tracy CONFIG REQUIRED)
   target_link_libraries(openspace-core PUBLIC Tracy::TracyClient)
   target_compile_definitions(openspace-core PUBLIC "TRACY_ENABLE")

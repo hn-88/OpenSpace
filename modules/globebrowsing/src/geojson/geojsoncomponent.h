@@ -157,6 +157,7 @@ private:
 
     std::unique_ptr<opengl::ProgramObject> _linesAndPolygonsProgram = nullptr;
     std::unique_ptr<opengl::ProgramObject> _pointsProgram = nullptr;
+    bool _gpuSupportsDouble = true;
 };
 
 } // namespace openspace

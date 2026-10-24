@@ -39,6 +39,7 @@
 #include <openspace/scene/scene.h>
 #include <openspace/scene/scenegraphnode.h>
 #include <openspace/util/distanceconstants.h>
+#include <openspace/util/nogpudouble.h>
 #include <openspace/util/updatestructures.h>
 #include <format>
 #include <fstream>
@@ -112,16 +113,26 @@ RenderableSolarImageryProjection::RenderableSolarImageryProjection(
 }
 
 void RenderableSolarImageryProjection::initializeGL() {
-    std::filesystem::path vertexShader =
-        absPath("${MODULE_SOLARBROWSING}/shaders/spacecraftimageprojection_vs.glsl");
-    std::filesystem::path fragmentShader =
-        absPath("${MODULE_SOLARBROWSING}/shaders/spacecraftimageprojection_fs.glsl");
+    _gpuSupportsDouble = !checkNoGpuDoubleEnv();
+    if (!_gpuSupportsDouble) {
+        LINFO("NO_GPU_DOUBLE environment variable detected. Using float shaders for RenderableSolarImageryProjection.");
+    }
+
+    const std::filesystem::path vertexShader = _gpuSupportsDouble ?
+        absPath("${MODULE_SOLARBROWSING}/shaders/spacecraftimageprojection_vs.glsl") :
+        absPath("${MODULE_SOLARBROWSING}/shaders/spacecraftimageprojection_vs_float.glsl");
+    const std::filesystem::path fragmentShader = _gpuSupportsDouble ?
+        absPath("${MODULE_SOLARBROWSING}/shaders/spacecraftimageprojection_fs.glsl") :
+        absPath("${MODULE_SOLARBROWSING}/shaders/spacecraftimageprojection_fs_float.glsl");
+
+    const std::string programName = _gpuSupportsDouble ?
+        "SpacecraftImageSphereProgram" : "SpacecraftImageSphereProgramFloat";
 
     _shader = BaseModule::ProgramObjectManager.request(
-        "SpacecraftImageSphereProgram",
+        programName,
         [&]() -> std::unique_ptr<opengl::ProgramObject> {
             return global::renderEngine->buildRenderProgram(
-                "SpacecraftImageSphereProgram",
+                programName,
                 vertexShader,
                 fragmentShader
             );
@@ -132,8 +143,10 @@ void RenderableSolarImageryProjection::initializeGL() {
 }
 
 void RenderableSolarImageryProjection::deinitializeGL() {
+    const std::string programName = _gpuSupportsDouble ?
+        "SpacecraftImageSphereProgram" : "SpacecraftImageSphereProgramFloat";
     BaseModule::ProgramObjectManager.release(
-        "SpacecraftImageSphereProgram",
+        programName,
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }
@@ -198,14 +211,32 @@ void RenderableSolarImageryProjection::render(const RenderData& data, RendererTa
         _shader->setUniform(std::format("isCoronaGraph[{}]", i), isCoronaGraph);
         _shader->setUniform(std::format("isEnabled[{}]", i), solarImageryEnabled);
         _shader->setUniform(std::format("scale[{}]", i), solarImagery->scale());
-        _shader->setUniform(
-            std::format("sunToSpacecraftReferenceFrame[{}]", i),
-            planeRot * glm::dmat4(data.modelTransform.rotation)
-        );
-        _shader->setUniform(
-            std::format("planePositionSpacecraft[{}]", i),
-            planePosSpacecraft
-        );
+        if (_gpuSupportsDouble) {
+            _shader->setUniform(
+                std::format("sunToSpacecraftReferenceFrame[{}]", i),
+                planeRot * glm::dmat4(data.modelTransform.rotation)
+            );
+            _shader->setUniform(
+                std::format("planePositionSpacecraft[{}]", i),
+                planePosSpacecraft
+            );
+        }
+        else {
+            glm::mat4 ref_hi, ref_lo;
+            splitDmat4(planeRot * glm::dmat4(data.modelTransform.rotation), ref_hi, ref_lo);
+            _shader->setUniform(
+                std::format("sunToSpacecraftReferenceFrame_hi[{}]", i),
+                ref_hi
+            );
+            _shader->setUniform(
+                std::format("sunToSpacecraftReferenceFrame_lo[{}]", i),
+                ref_lo
+            );
+            _shader->setUniform(
+                std::format("planePositionSpacecraft[{}]", i),
+                glm::vec3(planePosSpacecraft)
+            );
+        }
         _shader->setUniform(std::format("gammaValue[{}]", i), solarImagery->gammaValue());
         _shader->setUniform(
             std::format("contrastValue[{}]", i),

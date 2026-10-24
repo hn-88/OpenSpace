@@ -26,7 +26,6 @@
 
 #include <QEvent>
 #include <QHBoxLayout>
-#include <QIcon>
 #include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
@@ -34,14 +33,8 @@
 #include <QVBoxLayout>
 
 namespace {
-    constexpr const char* ArrowDown = ":/images/dropdown-arrow.png";
-    constexpr const char* ArrowUp = ":/images/dropdown-arrow-up.png";
-    constexpr QSize ArrowSize = QSize(10, 6);
-
-    void setChevron(QLabel* label, bool isExpanded) {
-        // QIcon picks the @2x image on high-DPI screens
-        label->setPixmap(QIcon(isExpanded ? ArrowUp : ArrowDown).pixmap(ArrowSize));
-    }
+    constexpr const char* ChevronDown = "\xe2\x96\xbe";  // v
+    constexpr const char* ChevronUp = "\xe2\x96\xb4";  // ^
 } // namespace
 
 CollapsibleSection::CollapsibleSection(QWidget* parent, const QString& title,
@@ -104,10 +97,10 @@ CollapsibleSection::CollapsibleSection(QWidget* parent, const QString& title,
     headerLayout->addStretch(1);
 
     // Chevron: transparent to mouse events so clicks reach the parent frame
-    _chevronLabel = new QLabel(_headerFrame);
+    _chevronLabel = new QLabel(ChevronDown, _headerFrame);
     _chevronLabel->setObjectName("accordion-chevron");
     _chevronLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    setChevron(_chevronLabel, _isExpanded);
+    _chevronLabel->setText(_isExpanded ? ChevronUp : ChevronDown);
     headerLayout->addWidget(_chevronLabel);
 
     // Content area
@@ -135,7 +128,7 @@ bool CollapsibleSection::eventFilter(QObject* object, QEvent* event) {
         }
         _isExpanded = !_isExpanded;
         _contentFrame->setVisible(_isExpanded && !_frameLayout->isEmpty());
-        setChevron(_chevronLabel, _isExpanded);
+        _chevronLabel->setText(_isExpanded ? ChevronUp : ChevronDown);
         return true;
     }
     if (mouseEvent->button() == Qt::RightButton && !_sectionKey.isEmpty()) {

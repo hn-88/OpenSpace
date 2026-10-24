@@ -50,9 +50,7 @@ void IdentifierRegistry::rebuildFromAsset(const JAsset& asset,
         const auto it = item.properties.find("Identifier");
         if (it != item.properties.end() && it->second.isString()) {
             const QString id = QString::fromStdString(it->second.toString());
-            if (!id.isEmpty()) {
-                sources[id].append(localSource);
-            }
+            sources[id].append(localSource);
         }
     }
 
@@ -85,9 +83,7 @@ void IdentifierRegistry::rebuildFromAsset(const JAsset& asset,
             const auto it = item.properties.find("Identifier");
             if (it != item.properties.end() && it->second.isString()) {
                 const QString id = QString::fromStdString(it->second.toString());
-                if (!id.isEmpty()) {
-                    sources[id].append(depSource);
-                }
+                sources[id].append(depSource);
             }
         }
     }

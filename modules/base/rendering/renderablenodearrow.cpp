@@ -412,21 +412,45 @@ RenderableNodeArrow::RenderableNodeArrow(const Dictionary& dictionary)
 }
 
 void RenderableNodeArrow::initializeGL() {
-    _shaderProgram = BaseModule::ProgramObjectManager.request(
-        "NodeDirectionLineProgram",
-        []() -> std::unique_ptr<opengl::ProgramObject> {
-            return global::renderEngine->buildRenderProgram(
-                "NodeDirectionLineProgram",
-                absPath("${MODULE_BASE}/shaders/arrow_vs.glsl"),
-                absPath("${MODULE_BASE}/shaders/arrow_fs.glsl")
-            );
-        }
-    );
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Arrow shaders.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
+    if (_gpuSupportsDouble) {
+        _shaderProgram = BaseModule::ProgramObjectManager.request(
+            "NodeDirectionLineProgram",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "NodeDirectionLineProgram",
+                    absPath("${MODULE_BASE}/shaders/arrow_vs.glsl"),
+                    absPath("${MODULE_BASE}/shaders/arrow_fs.glsl")
+                );
+            }
+        );
+    }
+    else {
+        _shaderProgram = BaseModule::ProgramObjectManager.request(
+            "NodeDirectionLineProgramFloat",
+            []() -> std::unique_ptr<opengl::ProgramObject> {
+                return global::renderEngine->buildRenderProgram(
+                    "NodeDirectionLineProgramFloat",
+                    absPath("${MODULE_BASE}/shaders/arrow_vs_float.glsl"),
+                    absPath("${MODULE_BASE}/shaders/arrow_fs.glsl")
+                );
+            }
+        );
+    }
 }
 
 void RenderableNodeArrow::deinitializeGL() {
     BaseModule::ProgramObjectManager.release(
-        "NodeDirectionLineProgram",
+        _gpuSupportsDouble ? "NodeDirectionLineProgram" : "NodeDirectionLineProgramFloat",
         [](opengl::ProgramObject* p) {
             global::renderEngine->removeRenderProgram(p);
         }

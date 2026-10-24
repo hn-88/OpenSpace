@@ -608,20 +608,48 @@ RenderableGaiaStars::RenderableGaiaStars(const Dictionary& dictionary)
 }
 
 void RenderableGaiaStars::initializeGL() {
-    _program = opengl::ProgramObject::Build(
-        "GaiaStar",
-        absPath("${MODULE_GAIA}/shaders/gaia_ssbo_vs.glsl"),
-        absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
-        absPath("${MODULE_GAIA}/shaders/gaia_point_gs.glsl")
-    );
-    opengl::updateUniformLocations(*_program, _uniformCache);
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float Gaia shaders and uniforms.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
 
-    _programTM = global::renderEngine->buildRenderProgram(
-        "ToneMapping",
-        absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_vs.glsl"),
-        absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_point_fs.glsl")
-    );
-    opengl::updateUniformLocations(*_programTM, _uniformCacheTM);
+    if (_gpuSupportsDouble) {
+        _program = opengl::ProgramObject::Build(
+            "GaiaStar",
+            absPath("${MODULE_GAIA}/shaders/gaia_ssbo_vs.glsl"),
+            absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
+            absPath("${MODULE_GAIA}/shaders/gaia_point_gs.glsl")
+        );
+        opengl::updateUniformLocations(*_program, _uniformCache);
+
+        _programTM = global::renderEngine->buildRenderProgram(
+            "ToneMapping",
+            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_vs.glsl"),
+            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_point_fs.glsl")
+        );
+        opengl::updateUniformLocations(*_programTM, _uniformCacheTM);
+    }
+    else {
+        _program = opengl::ProgramObject::Build(
+            "GaiaStarFloat",
+            absPath("${MODULE_GAIA}/shaders/gaia_ssbo_vs_float.glsl"),
+            absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
+            absPath("${MODULE_GAIA}/shaders/gaia_point_gs_float.glsl")
+        );
+        opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+
+        _programTM = global::renderEngine->buildRenderProgram(
+            "ToneMappingFloat",
+            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_vs.glsl"),
+            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_point_fs_float.glsl")
+        );
+        opengl::updateUniformLocations(*_programTM, _uniformCacheTM);
+    }
 
     glCreateVertexArrays(1, &_vaoEmpty);
     glCreateBuffers(1, &_ssboIdx);
@@ -826,10 +854,22 @@ void RenderableGaiaStars::render(const RenderData& data, RendererTasks&) {
     glDepthMask(false);
     _program->activate();
 
-    _program->setUniform(_uniformCache.opacity, opacity());
-    _program->setUniform(_uniformCache.model, model);
-    _program->setUniform(_uniformCache.view, data.camera.combinedViewMatrix());
-    _program->setUniform(_uniformCache.projection, data.camera.projectionMatrix());
+    if (_gpuSupportsDouble) {
+        _program->setUniform(_uniformCache.opacity, opacity());
+        _program->setUniform(_uniformCache.model, model);
+        _program->setUniform(_uniformCache.view, data.camera.combinedViewMatrix());
+        _program->setUniform(_uniformCache.projection, data.camera.projectionMatrix());
+    }
+    else {
+        const auto [mHi, mLo] = splitDmat4(model);
+        const auto [vHi, vLo] = splitDmat4(data.camera.combinedViewMatrix());
+        _program->setUniform(_uniformCacheFloat.opacity, opacity());
+        _program->setUniform(_uniformCacheFloat.model_hi, mHi);
+        _program->setUniform(_uniformCacheFloat.model_lo, mLo);
+        _program->setUniform(_uniformCacheFloat.view_hi, vHi);
+        _program->setUniform(_uniformCacheFloat.view_lo, vLo);
+        _program->setUniform(_uniformCacheFloat.projection, data.camera.projectionMatrix());
+    }
     _program->setUniform(
         _uniformCache.time,
         static_cast<float>(data.time.j2000Seconds())
@@ -913,14 +953,24 @@ void RenderableGaiaStars::update(const UpdateData&) {
 
     if (_program->isDirty()) [[unlikely]] {
         global::renderEngine->removeRenderProgram(_program.get());
-        _program = opengl::ProgramObject::Build(
-            "GaiaStar",
-            absPath("${MODULE_GAIA}/shaders/gaia_ssbo_vs.glsl"),
-            absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
-            absPath("${MODULE_GAIA}/shaders/gaia_point_gs.glsl")
-        );
-
-        opengl::updateUniformLocations(*_program, _uniformCache);
+        if (_gpuSupportsDouble) {
+            _program = opengl::ProgramObject::Build(
+                "GaiaStar",
+                absPath("${MODULE_GAIA}/shaders/gaia_ssbo_vs.glsl"),
+                absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
+                absPath("${MODULE_GAIA}/shaders/gaia_point_gs.glsl")
+            );
+            opengl::updateUniformLocations(*_program, _uniformCache);
+        }
+        else {
+            _program = opengl::ProgramObject::Build(
+                "GaiaStarFloat",
+                absPath("${MODULE_GAIA}/shaders/gaia_ssbo_vs_float.glsl"),
+                absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
+                absPath("${MODULE_GAIA}/shaders/gaia_point_gs_float.glsl")
+            );
+            opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+        }
 
         _program->setSsboBinding("ssbo_idx_data", _ssboIdxBinding->bindingNumber());
         _program->setSsboBinding("ssbo_comb_data", _ssboDataBinding->bindingNumber());
@@ -928,10 +978,13 @@ void RenderableGaiaStars::update(const UpdateData&) {
 
     if (_programTM->isDirty()) [[unlikely]] {
         global::renderEngine->removeRenderProgram(_programTM.get());
+        const std::filesystem::path fsTM = _gpuSupportsDouble ?
+            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_point_fs.glsl") :
+            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_point_fs_float.glsl");
         _programTM = global::renderEngine->buildRenderProgram(
-            "ToneMapping",
+            _gpuSupportsDouble ? "ToneMapping" : "ToneMappingFloat",
             absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_vs.glsl"),
-            absPath("${MODULE_GAIA}/shaders/gaia_tonemapping_point_fs.glsl")
+            fsTM
         );
         opengl::updateUniformLocations(*_programTM, _uniformCacheTM);
     }

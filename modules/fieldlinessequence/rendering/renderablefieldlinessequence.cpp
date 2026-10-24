@@ -798,9 +798,23 @@ void RenderableFieldlinesSequence::initialize() {
 }
 
 void RenderableFieldlinesSequence::initializeGL() {
+    const EnvCheckResult noDoubleEnv = checkNoGpuDoubleEnv();
+    if (noDoubleEnv.isSet) {
+        LINFO(std::format(
+            "NO_GPU_DOUBLE environment variable detected (set to '{}'). "
+            "Using float FieldlinesSequence shaders.",
+            noDoubleEnv.value
+        ));
+        _gpuSupportsDouble = false;
+    }
+
+    const std::filesystem::path vs = _gpuSupportsDouble ?
+        absPath("${MODULE_FIELDLINESSEQUENCE}/shaders/fieldlinessequence_vs.glsl") :
+        absPath("${MODULE_FIELDLINESSEQUENCE}/shaders/fieldlinessequence_vs_float.glsl");
+
     _shaderProgram = global::renderEngine->buildRenderProgram(
-        "FieldlinesSequence",
-        absPath("${MODULE_FIELDLINESSEQUENCE}/shaders/fieldlinessequence_vs.glsl"),
+        _gpuSupportsDouble ? "FieldlinesSequence" : "FieldlinesSequenceFloat",
+        vs,
         absPath("${MODULE_FIELDLINESSEQUENCE}/shaders/fieldlinessequence_fs.glsl")
     );
 
@@ -1296,10 +1310,14 @@ void RenderableFieldlinesSequence::render(const RenderData& data, RendererTasks&
     _shaderProgram->setUniform("particleSize", _flowParticleSize);
     _shaderProgram->setUniform("particleSpacing", _flowParticleSpacing);
     _shaderProgram->setUniform("particleSpeed", _flowSpeed);
-    _shaderProgram->setUniform(
-        "time",
-        global::windowDelegate->applicationTime() * (_flowReversed ? -1 : 1)
-    );
+    const double appTime =
+        global::windowDelegate->applicationTime() * (_flowReversed ? -1 : 1);
+    if (_gpuSupportsDouble) {
+        _shaderProgram->setUniform("time", appTime);
+    }
+    else {
+        _shaderProgram->setUniform("time", static_cast<float>(appTime));
+    }
 
     _shaderProgram->setUniform("opacity", opacity());
 

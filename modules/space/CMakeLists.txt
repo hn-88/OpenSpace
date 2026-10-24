@@ -74,17 +74,22 @@ set(SHADER_FILES
   shaders/constellationbounds_vs.glsl
   shaders/constellationlines_fs.glsl
   shaders/constellationlines_vs.glsl
+  shaders/constellationlines_vs_float.glsl
   shaders/eclipsecone_fs.glsl
   shaders/eclipsecone_vs.glsl
   shaders/fluxnodes_fs.glsl
   shaders/fluxnodes_vs.glsl
+  shaders/fluxnodes_vs_float.glsl
   shaders/habitablezone_vs.glsl
   shaders/habitablezone_fs.glsl
   shaders/keplerpoints_fs.glsl
   shaders/keplerpoints_gs.glsl
+  shaders/keplerpoints_gs_float.glsl
   shaders/keplerpoints_vs.glsl
+  shaders/keplerpoints_vs_float.glsl
   shaders/keplertrails_fs.glsl
   shaders/keplertrails_vs.glsl
+  shaders/keplertrails_vs_float.glsl
   shaders/rings_vs.glsl
   shaders/rings_fs.glsl
   shaders/df64.glsl
@@ -95,6 +100,7 @@ set(SHADER_FILES
   shaders/star_vs_float.glsl
   shaders/travelspeed_fs.glsl
   shaders/travelspeed_vs.glsl
+  shaders/travelspeed_vs_float.glsl
 )
 source_group("Shader Files" FILES ${SHADER_FILES})
 

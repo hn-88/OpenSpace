@@ -47,6 +47,7 @@ source_group("Source Files" FILES ${SOURCE_FILES})
 set(SHADER_FILES
   shaders/fieldlinessequence_fs.glsl
   shaders/fieldlinessequence_vs.glsl
+  shaders/fieldlinessequence_vs_float.glsl
 )
 source_group("Shader Files" FILES ${SHADER_FILES})
 
