@@ -946,8 +946,9 @@ void RenderablePointCloud::initializeGL() {
 
     initializeShadersAndGlExtras();
 
+    opengl::updateUniformLocations(*_program, _uniformCache);
     if (_gpuSupportsDouble) {
-        opengl::updateUniformLocations(*_program, _uniformCache);
+        opengl::updateUniformLocations(*_program, _uniformCacheDouble);
     }
     else {
         opengl::updateUniformLocations(*_program, _uniformCacheFloat);
@@ -1293,21 +1294,21 @@ void RenderablePointCloud::renderPoints(const RenderData& data,
     _program->activate();
 
     if (_gpuSupportsDouble) {
-        _program->setUniform(_uniformCache.cameraPosition, data.camera.position());
+        _program->setUniform(_uniformCacheDouble.cameraPosition, data.camera.position());
         _program->setUniform(
-            _uniformCache.cameraLookUp,
+            _uniformCacheDouble.cameraLookUp,
             glm::vec3(data.camera.lookUpVectorWorldSpace())
         );
         _program->setUniform(_uniformCache.renderOption, _renderOption.value());
-        _program->setUniform(_uniformCache.modelMatrix, modelMatrix);
+        _program->setUniform(_uniformCacheDouble.modelMatrix, modelMatrix);
 
         _program->setUniform(
-            _uniformCache.cameraViewMatrix,
+            _uniformCacheDouble.cameraViewMatrix,
             data.camera.combinedViewMatrix()
         );
 
         _program->setUniform(
-            _uniformCache.projectionMatrix,
+            _uniformCacheDouble.projectionMatrix,
             glm::dmat4(data.camera.projectionMatrix())
         );
     }
@@ -1321,7 +1322,7 @@ void RenderablePointCloud::renderPoints(const RenderData& data,
             _uniformCacheFloat.cameraLookUp,
             glm::vec3(data.camera.lookUpVectorWorldSpace())
         );
-        _program->setUniform(_uniformCacheFloat.renderOption, _renderOption.value());
+        _program->setUniform(_uniformCache.renderOption, _renderOption.value());
         _program->setUniform(_uniformCacheFloat.modelMatrix_hi, mHi);
         _program->setUniform(_uniformCacheFloat.modelMatrix_lo, mLo);
         _program->setUniform(_uniformCacheFloat.cameraViewMatrix_hi, vHi);
