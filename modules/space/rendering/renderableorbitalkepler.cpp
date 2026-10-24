@@ -32,6 +32,7 @@
 #include <openspace/documentation/documentation.h>
 #include <openspace/filesystem/filesystem.h>
 #include <openspace/format.h>
+#include <openspace/logging/logmanager.h>
 #include <openspace/misc/assert.h>
 #include <openspace/misc/dictionary.h>
 #include <openspace/misc/exception.h>

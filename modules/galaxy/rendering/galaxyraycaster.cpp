@@ -26,6 +26,7 @@
 
 #include <openspace/filesystem/filesystem.h>
 #include <openspace/format.h>
+#include <openspace/logging/logmanager.h>
 #include <openspace/misc/profiling.h>
 #include <openspace/opengl/gl.h>
 #include <openspace/opengl/programobject.h>

@@ -30,6 +30,7 @@
 #include <openspace/engine/globals.h>
 #include <openspace/filesystem/filesystem.h>
 #include <openspace/glm.h>
+#include <openspace/logging/logmanager.h>
 #include <openspace/misc/dictionary.h>
 #include <openspace/opengl/openglstatecache.h>
 #include <openspace/opengl/programobject.h>
