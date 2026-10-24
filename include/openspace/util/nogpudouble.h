@@ -34,8 +34,11 @@ namespace openspace {
 
 struct EnvCheckResult {
     bool enabled = false;
+    bool isSet = false;
     std::string varName;
     std::string value;
+
+    explicit operator bool() const noexcept { return enabled; }
 };
 
 /**
@@ -55,14 +58,14 @@ inline EnvCheckResult checkNoGpuDoubleEnv() {
                 sv.remove_suffix(1);
             }
             if (!sv.empty() && sv != "0" && sv != "false" && sv != "FALSE" && sv != "False") {
-                return { true, varName, std::string(sv) };
+                return { true, true, varName, std::string(sv) };
             }
             else {
-                return { false, varName, std::string(sv) };
+                return { false, false, varName, std::string(sv) };
             }
         }
     }
-    return { false, "", "" };
+    return { false, false, "", "" };
 }
 
 inline bool isNoGpuDoubleSet() {

@@ -46,6 +46,8 @@
 namespace {
     using namespace openspace;
 
+    constexpr std::string_view _loggerCat = "RenderableTrail";
+
     // The possible values for the _renderingModes property
     enum RenderingMode {
         RenderingModeLines = 0,

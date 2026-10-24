@@ -58,6 +58,8 @@
 namespace {
     using namespace openspace;
 
+    constexpr std::string_view _loggerCat = "RenderableOrbitalKepler";
+
     // The possible values for the _renderingModes property
     enum class RenderMode {
         RenderingModeTrail = 0,

@@ -47,6 +47,8 @@
 #include <memory>
 
 namespace {
+    constexpr std::string_view _loggerCat = "RenderableSolarImageryProjection";
+
     // This number MUST match the constant specified in the shader
     constexpr int MaxSpacecraftObservatories = 7;
 

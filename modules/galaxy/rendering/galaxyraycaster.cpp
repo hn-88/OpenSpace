@@ -38,6 +38,7 @@
 #include <utility>
 
 namespace {
+    constexpr std::string_view _loggerCat = "GalaxyRaycaster";
     constexpr std::string_view GlslRaycastPath =
         "${MODULE_GALAXY}/shaders/galaxyraycast.glsl";
     constexpr std::string_view GlslBoundsVsPath =

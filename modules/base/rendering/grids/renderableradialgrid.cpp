@@ -41,6 +41,8 @@
 namespace {
     using namespace openspace;
 
+    constexpr std::string_view _loggerCat = "RenderableRadialGrid";
+
     constexpr Vec3PropertyInfo ColorInfo = {
         .identifier = "Color",
         .name = "Color",
