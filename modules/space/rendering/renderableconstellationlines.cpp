@@ -334,7 +334,13 @@ void RenderableConstellationLines::render(const RenderData& data, RendererTasks&
 void RenderableConstellationLines::update(const UpdateData&) {
     if (_program->isDirty()) {
         _program->rebuildFromFile();
-        opengl::updateUniformLocations(*_program, _uniformCache);
+        opengl::updateUniformLocations(*_program, _uniformCacheCommon);
+        if (_gpuSupportsDouble) {
+            opengl::updateUniformLocations(*_program, _uniformCacheDouble);
+        }
+        else {
+            opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+        }
     }
 }
 
