@@ -73,13 +73,89 @@ inline bool isNoGpuDoubleSet() {
 }
 
 /**
- * Splits a 64-bit double precision 4x4 matrix into two 32-bit float 4x4 matrices
+ * Splits a 64-bit double precision value into two 32-bit floats (hi and lo)
  * representing the high and low parts using exact Dekker/Veltkamp error decomposition:
  *   val = hi + lo  (where hi is float(val) and lo is float(val - double(hi)))
  */
-inline std::pair<glm::mat4, glm::mat4> splitDmat4(const glm::dmat4& m) {
-    glm::mat4 hi;
-    glm::mat4 lo;
+inline void splitDouble(double d, float& hi, float& lo) {
+    hi = static_cast<float>(d);
+    lo = static_cast<float>(d - static_cast<double>(hi));
+}
+
+inline std::pair<float, float> splitDouble(double d) {
+    float hi = 0.f;
+    float lo = 0.f;
+    splitDouble(d, hi, lo);
+    return { hi, lo };
+}
+
+/**
+ * Splits a 64-bit double precision 2D vector into two 32-bit float 2D vectors (hi and lo).
+ */
+inline void splitDvec2(const glm::dvec2& v, glm::vec2& hi, glm::vec2& lo) {
+    const float hx = static_cast<float>(v.x);
+    const float lx = static_cast<float>(v.x - static_cast<double>(hx));
+    const float hy = static_cast<float>(v.y);
+    const float ly = static_cast<float>(v.y - static_cast<double>(hy));
+    hi = glm::vec2(hx, hy);
+    lo = glm::vec2(lx, ly);
+}
+
+inline std::pair<glm::vec2, glm::vec2> splitDvec2(const glm::dvec2& v) {
+    glm::vec2 hi(0.f);
+    glm::vec2 lo(0.f);
+    splitDvec2(v, hi, lo);
+    return { hi, lo };
+}
+
+/**
+ * Splits a 64-bit double precision 3D vector into two 32-bit float 3D vectors (hi and lo).
+ */
+inline void splitDvec3(const glm::dvec3& v, glm::vec3& hi, glm::vec3& lo) {
+    const float hx = static_cast<float>(v.x);
+    const float lx = static_cast<float>(v.x - static_cast<double>(hx));
+    const float hy = static_cast<float>(v.y);
+    const float ly = static_cast<float>(v.y - static_cast<double>(hy));
+    const float hz = static_cast<float>(v.z);
+    const float lz = static_cast<float>(v.z - static_cast<double>(hz));
+    hi = glm::vec3(hx, hy, hz);
+    lo = glm::vec3(lx, ly, lz);
+}
+
+inline std::pair<glm::vec3, glm::vec3> splitDvec3(const glm::dvec3& v) {
+    glm::vec3 hi(0.f);
+    glm::vec3 lo(0.f);
+    splitDvec3(v, hi, lo);
+    return { hi, lo };
+}
+
+/**
+ * Splits a 64-bit double precision 4D vector into two 32-bit float 4D vectors (hi and lo).
+ */
+inline void splitDvec4(const glm::dvec4& v, glm::vec4& hi, glm::vec4& lo) {
+    const float hx = static_cast<float>(v.x);
+    const float lx = static_cast<float>(v.x - static_cast<double>(hx));
+    const float hy = static_cast<float>(v.y);
+    const float ly = static_cast<float>(v.y - static_cast<double>(hy));
+    const float hz = static_cast<float>(v.z);
+    const float lz = static_cast<float>(v.z - static_cast<double>(hz));
+    const float hw = static_cast<float>(v.w);
+    const float lw = static_cast<float>(v.w - static_cast<double>(hw));
+    hi = glm::vec4(hx, hy, hz, hw);
+    lo = glm::vec4(lx, ly, lz, lw);
+}
+
+inline std::pair<glm::vec4, glm::vec4> splitDvec4(const glm::dvec4& v) {
+    glm::vec4 hi(0.f);
+    glm::vec4 lo(0.f);
+    splitDvec4(v, hi, lo);
+    return { hi, lo };
+}
+
+/**
+ * Splits a 64-bit double precision 4x4 matrix into two 32-bit float 4x4 matrices (hi and lo).
+ */
+inline void splitDmat4(const glm::dmat4& m, glm::mat4& hi, glm::mat4& lo) {
     for (int col = 0; col < 4; ++col) {
         for (int row = 0; row < 4; ++row) {
             const double val = m[col][row];
@@ -89,21 +165,13 @@ inline std::pair<glm::mat4, glm::mat4> splitDmat4(const glm::dmat4& m) {
             lo[col][row] = l;
         }
     }
-    return { hi, lo };
 }
 
-/**
- * Splits a 64-bit double precision 3D vector into two 32-bit float 3D vectors
- * representing the high and low parts using exact Dekker/Veltkamp error decomposition.
- */
-inline std::pair<glm::vec3, glm::vec3> splitDvec3(const glm::dvec3& v) {
-    const float hx = static_cast<float>(v.x);
-    const float lx = static_cast<float>(v.x - static_cast<double>(hx));
-    const float hy = static_cast<float>(v.y);
-    const float ly = static_cast<float>(v.y - static_cast<double>(hy));
-    const float hz = static_cast<float>(v.z);
-    const float lz = static_cast<float>(v.z - static_cast<double>(hz));
-    return { glm::vec3(hx, hy, hz), glm::vec3(lx, ly, lz) };
+inline std::pair<glm::mat4, glm::mat4> splitDmat4(const glm::dmat4& m) {
+    glm::mat4 hi;
+    glm::mat4 lo;
+    splitDmat4(m, hi, lo);
+    return { hi, lo };
 }
 
 } // namespace openspace
