@@ -187,6 +187,62 @@ vec4 df64_vec4_to_vec4(df64_vec4 a) {
     return a.hi + a.lo;
 }
 
+// Convert df64_vec4 to df64_vec3 (taking xyz components)
+df64_vec3 df64_vec4_to_df64_vec3(df64_vec4 a) {
+    return df64_vec3(a.hi.xyz, a.lo.xyz);
+}
+
+// Subtract two split vec3 values: (a_hi, a_lo) - (b_hi, b_lo) returning single-precision vec3
+vec3 df64_vec3_sub(vec3 a_hi, vec3 a_lo, vec3 b_hi, vec3 b_lo) {
+    vec2 rx = df64_sub(vec2(a_hi.x, a_lo.x), vec2(b_hi.x, b_lo.x));
+    vec2 ry = df64_sub(vec2(a_hi.y, a_lo.y), vec2(b_hi.y, b_lo.y));
+    vec2 rz = df64_sub(vec2(a_hi.z, a_lo.z), vec2(b_hi.z, b_lo.z));
+    return vec3(rx.x + rx.y, ry.x + ry.y, rz.x + rz.y);
+}
+
+vec3 df64_vec3_sub(vec3 a_hi, vec3 a_lo, vec3 b) {
+    return df64_vec3_sub(a_hi, a_lo, b, vec3(0.0));
+}
+
+vec3 df64_vec3_sub(vec3 a, vec3 b_hi, vec3 b_lo) {
+    return df64_vec3_sub(a, vec3(0.0), b_hi, b_lo);
+}
+
+// Add two split vec3 values: (a_hi, a_lo) + (b_hi, b_lo) returning single-precision vec3
+vec3 df64_vec3_add(vec3 a_hi, vec3 a_lo, vec3 b_hi, vec3 b_lo) {
+    vec2 rx = df64_add(vec2(a_hi.x, a_lo.x), vec2(b_hi.x, b_lo.x));
+    vec2 ry = df64_add(vec2(a_hi.y, a_lo.y), vec2(b_hi.y, b_lo.y));
+    vec2 rz = df64_add(vec2(a_hi.z, a_lo.z), vec2(b_hi.z, b_lo.z));
+    return vec3(rx.x + rx.y, ry.x + ry.y, rz.x + rz.y);
+}
+
+vec3 df64_vec3_add(vec3 a_hi, vec3 a_lo, vec3 b) {
+    return df64_vec3_add(a_hi, a_lo, b, vec3(0.0));
+}
+
+vec3 df64_vec3_add(vec3 a, vec3 b_hi, vec3 b_lo) {
+    return df64_vec3_add(a, vec3(0.0), b_hi, b_lo);
+}
+
+// Multiply split dmat4 by (vec3, float) returning single-precision vec4:
+vec4 df64_mat4_mul_vec4(mat4 M_hi, mat4 M_lo, vec3 v, float w) {
+    vec4 res = vec4(0.0);
+    for (int i = 0; i < 4; ++i) {
+        vec2 p0 = df64_mul_float(vec2(M_hi[0][i], M_lo[0][i]), v.x);
+        vec2 p1 = df64_mul_float(vec2(M_hi[1][i], M_lo[1][i]), v.y);
+        vec2 p2 = df64_mul_float(vec2(M_hi[2][i], M_lo[2][i]), v.z);
+        vec2 p3 = df64_mul_float(vec2(M_hi[3][i], M_lo[3][i]), w);
+        vec2 sum = df64_add(df64_add(p0, p1), df64_add(p2, p3));
+        res[i] = sum.x + sum.y;
+    }
+    return res;
+}
+
+// Multiply split dmat4 by single-precision vec4 returning single-precision vec4:
+vec4 df64_mat4_mul_to_vec4(mat4 M_hi, mat4 M_lo, vec4 v) {
+    return df64_mat4_mul_vec4(M_hi, M_lo, v.xyz, v.w);
+}
+
 // Multiply split dmat4 by single-precision vec4: M * v
 df64_vec4 df64_mat4_mul_vec4(mat4 M_hi, mat4 M_lo, vec4 v) {
     df64_vec4 res;

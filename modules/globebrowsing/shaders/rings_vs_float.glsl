@@ -25,7 +25,7 @@
 #version __CONTEXT__
 
 #include "powerscaling/powerscaling_vs.glsl"
-#include "${MODULE_GLOBEBROWSING}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(location = 0) in vec2 in_position;
 layout(location = 1) in vec2 in_texCoords;

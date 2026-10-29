@@ -25,7 +25,7 @@
 #version __CONTEXT__
 
 #include "powerscaling/powerscalingmath.glsl"
-#include "${MODULE_SPACE}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(lines) in;
 in Data {

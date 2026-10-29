@@ -25,7 +25,7 @@
 #version __CONTEXT__
 
 #include "powerscaling/powerscaling_vs.glsl"
-#include "${MODULE_DIGITALUNIVERSE}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(location = 0) in vec3 in_position;
 

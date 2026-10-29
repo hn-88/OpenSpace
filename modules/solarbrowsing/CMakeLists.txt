@@ -48,7 +48,6 @@ set(SOURCE_FILES
 source_group("Source Files" FILES ${SOURCE_FILES})
 
 set(SHADER_FILES
-  shaders/df64.glsl
   shaders/spacecraftimagefrustum_fs.glsl
   shaders/spacecraftimagefrustum_vs.glsl
   shaders/spacecraftimageplane_fs.glsl

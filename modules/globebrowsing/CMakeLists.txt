@@ -126,7 +126,6 @@ set(SHADER_FILES
   shaders/advanced_rings_vs_float.glsl
   shaders/advanced_rings_fs.glsl
   shaders/blending.glsl
-  shaders/df64.glsl
   shaders/ellipsoid.glsl
   shaders/geojson_fs.glsl
   shaders/geojson_points_fs.glsl

@@ -47,7 +47,6 @@ set(SHADER_FILES
   shaders/delta_j_calc_fs.glsl
   shaders/delta_s_calc_fs.glsl
   shaders/delta_s_sup_calc_fs.glsl
-  shaders/df64.glsl
   shaders/inscattering_calc_fs.glsl
   shaders/inscattering_sup_calc_fs.glsl
   shaders/irradiance_calc_fs.glsl

@@ -25,7 +25,7 @@
 #version __CONTEXT__
 
 #include "powerscaling/powerscalingmath.glsl"
-#include "${MODULE_BASE}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(points) in;
 in Data {

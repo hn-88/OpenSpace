@@ -50,7 +50,6 @@ set(SOURCE_FILES
 source_group("Source Files" FILES ${SOURCE_FILES})
 
 set(SHADER_FILES
-  shaders/df64.glsl
   shaders/gaia_point_fs.glsl
   shaders/gaia_point_gs.glsl
   shaders/gaia_point_gs_float.glsl

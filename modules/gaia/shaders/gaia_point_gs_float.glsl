@@ -25,7 +25,7 @@
 #version __CONTEXT__
 
 #include "floatoperations.glsl"
-#include "${MODULE_GAIA}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(points) in;
 in Data {

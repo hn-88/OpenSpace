@@ -99,7 +99,7 @@ void main() {
   vec3 up = cameraUp;
 
   df64_vec3 camPos_df = df64_vec3(cameraPosition_hi, cameraPosition_lo);
-  df64_vec3 diff = df64_vec3_sub(camPos_df, worldPos_df.xyz);
+  df64_vec3 diff = df64_vec3_sub(camPos_df, df64_vec3(worldPos_df.hi.xyz, worldPos_df.lo.xyz));
   vec3 cameraToPosDir = normalize(df64_vec3_to_vec3(diff));
 
   // Update right and up based on render mode

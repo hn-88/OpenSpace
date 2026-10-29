@@ -824,10 +824,7 @@ void RenderableModel::initializeGL() {
         _gpuSupportsDouble = false;
     }
 
-    std::string program = std::string(ProgramName);
-    if (!_gpuSupportsDouble) {
-        program += "|float";
-    }
+    std::string program = _gpuSupportsDouble ? std::string(ProgramName) : "ModelProgramFloat";
     if (!_vertexShaderPath.empty()) {
         program += "|vs=" + _vertexShaderPath.string();
     }
@@ -978,7 +975,7 @@ void RenderableModel::deinitializeGL() {
     glDeleteVertexArrays(1, &_vao);
     glDeleteBuffers(1, &_vbo);
 
-    std::string program = std::string(ProgramName);
+    std::string program = _gpuSupportsDouble ? std::string(ProgramName) : "ModelProgramFloat";
     if (!_vertexShaderPath.empty()) {
         program += "|vs=" + _vertexShaderPath.string();
     }

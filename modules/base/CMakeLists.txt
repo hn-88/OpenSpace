@@ -188,7 +188,6 @@ set(SHADER_FILES
   shaders/arrow_vs_float.glsl
   shaders/axes_fs.glsl
   shaders/axes_vs.glsl
-  shaders/df64.glsl
   shaders/disc_fs.glsl
   shaders/disc_vs.glsl
   shaders/grid_vs.glsl

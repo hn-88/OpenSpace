@@ -26,7 +26,7 @@
 
 #include "floatoperations.glsl"
 #include "powerscaling/powerscalingmath.glsl"
-#include "${MODULE_GALAXY}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(points) in;
 in Data {

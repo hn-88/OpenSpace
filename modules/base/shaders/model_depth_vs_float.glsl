@@ -24,7 +24,7 @@
 
 #version __CONTEXT__
 
-#include "${MODULE_BASE}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout(location = 0) in vec4 in_position;
 

@@ -27,7 +27,7 @@
 #extension GL_ARB_shader_storage_buffer_object : require
 
 #include "floatoperations.glsl"
-#include "${MODULE_GAIA}/shaders/df64.glsl"
+#include "df64.glsl"
 
 layout (std430, binding = 0) readonly buffer StarData {
   float allData[];
