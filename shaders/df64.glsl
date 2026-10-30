@@ -200,12 +200,14 @@ vec3 df64_vec3_sub(vec3 a_hi, vec3 a_lo, vec3 b_hi, vec3 b_lo) {
     return vec3(rx.x + rx.y, ry.x + ry.y, rz.x + rz.y);
 }
 
-vec3 df64_vec3_sub(vec3 a_hi, vec3 a_lo, vec3 b) {
-    return df64_vec3_sub(a_hi, a_lo, b, vec3(0.0));
+// Subtract single-precision vec3 from df64_vec3 returning single-precision vec3
+vec3 df64_vec3_sub(df64_vec3 a, vec3 b) {
+    return df64_vec3_sub(a.hi, a.lo, b, vec3(0.0));
 }
 
-vec3 df64_vec3_sub(vec3 a, vec3 b_hi, vec3 b_lo) {
-    return df64_vec3_sub(a, vec3(0.0), b_hi, b_lo);
+// Subtract df64_vec3 from single-precision vec3 returning single-precision vec3
+vec3 df64_vec3_sub(vec3 a, df64_vec3 b) {
+    return df64_vec3_sub(a, vec3(0.0), b.hi, b.lo);
 }
 
 // Add two split vec3 values: (a_hi, a_lo) + (b_hi, b_lo) returning single-precision vec3
@@ -216,12 +218,14 @@ vec3 df64_vec3_add(vec3 a_hi, vec3 a_lo, vec3 b_hi, vec3 b_lo) {
     return vec3(rx.x + rx.y, ry.x + ry.y, rz.x + rz.y);
 }
 
-vec3 df64_vec3_add(vec3 a_hi, vec3 a_lo, vec3 b) {
-    return df64_vec3_add(a_hi, a_lo, b, vec3(0.0));
+// Add single-precision vec3 to df64_vec3 returning single-precision vec3
+vec3 df64_vec3_add(df64_vec3 a, vec3 b) {
+    return df64_vec3_add(a.hi, a.lo, b, vec3(0.0));
 }
 
-vec3 df64_vec3_add(vec3 a, vec3 b_hi, vec3 b_lo) {
-    return df64_vec3_add(a, vec3(0.0), b_hi, b_lo);
+// Add df64_vec3 to single-precision vec3 returning single-precision vec3
+vec3 df64_vec3_add(vec3 a, df64_vec3 b) {
+    return df64_vec3_add(a, vec3(0.0), b.hi, b.lo);
 }
 
 // Multiply split dmat4 by (vec3, float) returning single-precision vec4:
