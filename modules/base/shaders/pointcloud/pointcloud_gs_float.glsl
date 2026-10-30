@@ -29,19 +29,19 @@
 
 layout(points) in;
 in Data {
-  vec4 orientation;
-  float colorParameter;
-  float textureLayer;
-  float scalingParameter;
+  flat float textureLayer;
+  flat float colorParameter;
+  flat float scalingParameter;
+  flat vec4 orientation; // quaternion
 } in_data[];
 
 layout(triangle_strip, max_vertices = 4) out;
 out Data {
-  vec4 positionViewSpace;
-  vec2 texCoords;
-  float screenSpaceDepth;
   flat int textureLayer;
   flat float colorParameter;
+  vec2 texCoords;
+  flat float screenSpaceDepth;
+  flat vec4 positionViewSpace;
 } out_data;
 
 // General settings
