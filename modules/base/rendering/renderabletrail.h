@@ -196,17 +196,15 @@ private:
     /// Program object used to render the data stored in RenderInformation
     opengl::ProgramObject* _programObject = nullptr;
     bool _gpuSupportsDouble = true;
-    UniformCache(opacity, modelViewTransform, projectionTransform, color, useLineFade,
+    UniformCache(opacity, projectionTransform, color, useLineFade,
         lineLength, lineFadeAmount, vertexSortingMethod, idOffset, nVertices, stride,
         pointSize, renderPhase, viewport, lineWidth, floatingOffset, useSplitRenderMode,
         numberOfUniqueVertices
     ) _uniformCache;
 
-    UniformCache(opacity, modelViewTransform_hi, modelViewTransform_lo,
-        projectionTransform, color, useLineFade, lineLength, lineFadeAmount,
-        vertexSortingMethod, idOffset, nVertices, stride, pointSize, renderPhase, viewport,
-        lineWidth, floatingOffset, useSplitRenderMode, numberOfUniqueVertices
-    ) _uniformCacheFloat;
+    UniformCache(modelViewTransform) _uniformCacheDouble;
+
+    UniformCache(modelViewTransform_hi, modelViewTransform_lo) _uniformCacheFloat;
 };
 
 } // namespace openspace

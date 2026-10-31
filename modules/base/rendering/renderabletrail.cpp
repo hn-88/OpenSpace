@@ -297,6 +297,7 @@ void RenderableTrail::initializeGL() {
             }
         );
         opengl::updateUniformLocations(*_programObject, _uniformCache);
+        opengl::updateUniformLocations(*_programObject, _uniformCacheDouble);
     }
     else {
         _programObject = BaseModule::ProgramObjectManager.request(
@@ -309,6 +310,7 @@ void RenderableTrail::initializeGL() {
                 );
             }
         );
+        opengl::updateUniformLocations(*_programObject, _uniformCache);
         opengl::updateUniformLocations(*_programObject, _uniformCacheFloat);
     }
 }
@@ -350,7 +352,7 @@ void RenderableTrail::internalRender(bool renderLines, bool renderPoints,
     const glm::dmat4 modelViewTransform = calcModelViewTransform(data, modelTransform);
     if (_gpuSupportsDouble) {
         _programObject->setUniform(
-            _uniformCache.modelViewTransform,
+            _uniformCacheDouble.modelViewTransform,
             modelViewTransform * info._localTransform
         );
     }
