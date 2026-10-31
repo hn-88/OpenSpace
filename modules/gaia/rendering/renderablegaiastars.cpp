@@ -626,6 +626,7 @@ void RenderableGaiaStars::initializeGL() {
             absPath("${MODULE_GAIA}/shaders/gaia_point_gs.glsl")
         );
         opengl::updateUniformLocations(*_program, _uniformCache);
+        opengl::updateUniformLocations(*_program, _uniformCacheDouble);
 
         _programTM = global::renderEngine->buildRenderProgram(
             "ToneMapping",
@@ -641,6 +642,7 @@ void RenderableGaiaStars::initializeGL() {
             absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
             absPath("${MODULE_GAIA}/shaders/gaia_point_gs_float.glsl")
         );
+        opengl::updateUniformLocations(*_program, _uniformCache);
         opengl::updateUniformLocations(*_program, _uniformCacheFloat);
 
         _programTM = global::renderEngine->buildRenderProgram(
@@ -853,22 +855,20 @@ void RenderableGaiaStars::render(const RenderData& data, RendererTasks&) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glDepthMask(false);
     _program->activate();
+    _program->setUniform(_uniformCache.opacity, opacity());
+    _program->setUniform(_uniformCache.projection, data.camera.projectionMatrix());
 
     if (_gpuSupportsDouble) {
-        _program->setUniform(_uniformCache.opacity, opacity());
-        _program->setUniform(_uniformCache.model, model);
-        _program->setUniform(_uniformCache.view, data.camera.combinedViewMatrix());
-        _program->setUniform(_uniformCache.projection, data.camera.projectionMatrix());
+        _program->setUniform(_uniformCacheDouble.model, model);
+        _program->setUniform(_uniformCacheDouble.view, data.camera.combinedViewMatrix());
     }
     else {
         const auto [mHi, mLo] = splitDmat4(model);
         const auto [vHi, vLo] = splitDmat4(data.camera.combinedViewMatrix());
-        _program->setUniform(_uniformCacheFloat.opacity, opacity());
         _program->setUniform(_uniformCacheFloat.model_hi, mHi);
         _program->setUniform(_uniformCacheFloat.model_lo, mLo);
         _program->setUniform(_uniformCacheFloat.view_hi, vHi);
         _program->setUniform(_uniformCacheFloat.view_lo, vLo);
-        _program->setUniform(_uniformCacheFloat.projection, data.camera.projectionMatrix());
     }
     _program->setUniform(
         _uniformCache.time,
@@ -961,6 +961,7 @@ void RenderableGaiaStars::update(const UpdateData&) {
                 absPath("${MODULE_GAIA}/shaders/gaia_point_gs.glsl")
             );
             opengl::updateUniformLocations(*_program, _uniformCache);
+            opengl::updateUniformLocations(*_program, _uniformCacheDouble);
         }
         else {
             _program = opengl::ProgramObject::Build(
@@ -969,6 +970,7 @@ void RenderableGaiaStars::update(const UpdateData&) {
                 absPath("${MODULE_GAIA}/shaders/gaia_point_fs.glsl"),
                 absPath("${MODULE_GAIA}/shaders/gaia_point_gs_float.glsl")
             );
+            opengl::updateUniformLocations(*_program, _uniformCache);
             opengl::updateUniformLocations(*_program, _uniformCacheFloat);
         }
 

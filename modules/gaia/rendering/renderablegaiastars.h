@@ -139,17 +139,15 @@ private:
 
     std::unique_ptr<opengl::ProgramObject> _program;
     bool _gpuSupportsDouble = true;
-    UniformCache(model, view, viewScaling, projection, renderOption, luminosityMultiplier,
+    UniformCache(viewScaling, projection, renderOption, luminosityMultiplier,
         cutOffThreshold, time, colorTexture, nChunksToRender, valuesPerStar,
         maxStarsPerNode, posXThreshold, posYThreshold, posZThreshold, gMagThreshold,
         bpRpThreshold, distThreshold, opacity)
         _uniformCache;
 
-    UniformCache(model_hi, model_lo, view_hi, view_lo, viewScaling, projection,
-        renderOption, luminosityMultiplier, cutOffThreshold, time, colorTexture,
-        nChunksToRender, valuesPerStar, maxStarsPerNode, posXThreshold, posYThreshold,
-        posZThreshold, gMagThreshold, bpRpThreshold, distThreshold, opacity)
-        _uniformCacheFloat;
+    UniformCache(model, view) _uniformCacheDouble;
+
+    UniformCache(model_hi, model_lo, view_hi, view_lo) _uniformCacheFloat;
 
     std::unique_ptr<opengl::ProgramObject> _programTM;
     UniformCache(renderedTexture, screenSize, filterSize, sigma, pixelWeightThreshold,

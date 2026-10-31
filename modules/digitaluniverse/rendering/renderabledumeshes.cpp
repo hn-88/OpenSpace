@@ -474,7 +474,12 @@ void RenderableDUMeshes::render(const RenderData& data, RendererTasks&) {
 void RenderableDUMeshes::update(const UpdateData&) {
     if (_program->isDirty()) [[unlikely]] {
         _program->rebuildFromFile();
-        opengl::updateUniformLocations(*_program, _uniformCache);
+        if (_gpuSupportsDouble) {
+            opengl::updateUniformLocations(*_program, _uniformCache);
+        }
+        else {
+            opengl::updateUniformLocations(*_program, _uniformCacheFloat);
+        }
     }
 }
 
