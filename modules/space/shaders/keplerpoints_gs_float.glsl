@@ -73,17 +73,16 @@ void main() {
 
   vec4 pos = mix(gl_in[0].gl_Position, gl_in[1].gl_Position, percentage);
 
-  vec4 vertPosWorldSpace = df64_mat4_mul_vec4(
+  df64_vec4 vertPosWorldSpace = df64_mat4_mul_vec4(
     modelTransform_hi,
     modelTransform_lo,
-    pos.xyz,
-    pos.w
+    pos
   );
   vec3 camPosToVertPos = df64_vec3_sub(
     cameraPositionWorld_hi,
     cameraPositionWorld_lo,
-    vertPosWorldSpace.xyz,
-    vec3(0.0)
+    vertPosWorldSpace.hi.xyz,
+    vertPosWorldSpace.lo.xyz
   );
 
   vec3 up;
@@ -113,40 +112,39 @@ void main() {
     up *= correction;
   }
 
-  vec4 p0World = vec4(vertPosWorldSpace.xyz + (up - right), 1.0);
-  vec4 p1World = vec4(vertPosWorldSpace.xyz + (-right - up), 1.0);
-  vec4 p2World = vec4(vertPosWorldSpace.xyz + (right + up), 1.0);
-  vec4 p3World = vec4(vertPosWorldSpace.xyz + (right - up), 1.0);
-
-  vec4 viewSpaceOrigin = df64_mat4_mul_vec4(
+  df64_vec4 vertPosView_df = df64_mat4_mul_df64_vec4(
     viewTransform_hi,
     viewTransform_lo,
-    vertPosWorldSpace.xyz,
-    1.0
+    vertPosWorldSpace
   );
-  out_data.viewSpace = z_normalization(projectionTransform * viewSpaceOrigin);
+  vec4 vertPosView = df64_vec4_to_vec4(vertPosView_df);
+
+  vec3 upView = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, up, 0.0).xyz;
+  vec3 rightView = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, right, 0.0).xyz;
+
+  out_data.viewSpace = z_normalization(projectionTransform * vertPosView);
   out_data.projectionViewDepth = out_data.viewSpace.w;
 
   // left-top
-  vec4 v0 = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, p0World.xyz, 1.0);
+  vec4 v0 = vertPosView + vec4(upView - rightView, 0.0);
   gl_Position = z_normalization(projectionTransform * v0);
   out_data.texCoords = vec2(0.0, 0.0);
   EmitVertex();
 
   // left-bot
-  vec4 v1 = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, p1World.xyz, 1.0);
+  vec4 v1 = vertPosView + vec4(-rightView - upView, 0.0);
   gl_Position = z_normalization(projectionTransform * v1);
   out_data.texCoords = vec2(1.0, 0.0);
   EmitVertex();
 
   // right-top
-  vec4 v2 = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, p2World.xyz, 1.0);
+  vec4 v2 = vertPosView + vec4(rightView + upView, 0.0);
   gl_Position = z_normalization(projectionTransform * v2);
   out_data.texCoords = vec2(0.0, 1.0);
   EmitVertex();
 
   // right-bot
-  vec4 v3 = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, p3World.xyz, 1.0);
+  vec4 v3 = vertPosView + vec4(rightView - upView, 0.0);
   gl_Position = z_normalization(projectionTransform * v3);
   out_data.texCoords = vec2(1.0, 1.0);
   EmitVertex();

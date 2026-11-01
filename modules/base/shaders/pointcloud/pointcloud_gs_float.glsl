@@ -104,11 +104,10 @@ void main() {
   out_data.textureLayer = int(in_data[0].textureLayer);
   out_data.colorParameter = in_data[0].colorParameter;
 
-  vec4 dpos = df64_mat4_mul_vec4(
+  df64_vec4 dpos = df64_mat4_mul_vec4(
     modelMatrix_hi,
     modelMatrix_lo,
-    gl_in[0].gl_Position.xyz,
-    1.0
+    vec4(gl_in[0].gl_Position.xyz, 1.0)
   );
 
   float scaleMultiply = pow(10.0, scaleExponent);
@@ -127,8 +126,8 @@ void main() {
     vec3 normal = normalize(df64_vec3_sub(
       cameraPosition_hi,
       cameraPosition_lo,
-      dpos.xyz,
-      vec3(0.0)
+      dpos.hi.xyz,
+      dpos.lo.xyz
     ));
     vec3 newRight = normalize(cross(cameraLookUp, normal));
     vec3 newUp = cross(normal, newRight);
@@ -147,16 +146,18 @@ void main() {
   scaledRight *= scaleMultiply * 0.5;
   scaledUp *= scaleMultiply * 0.5;
 
+  df64_vec4 viewPos_df = df64_mat4_mul_df64_vec4(
+    cameraViewMatrix_hi,
+    cameraViewMatrix_lo,
+    dpos
+  );
+  vec4 viewPos = df64_vec4_to_vec4(viewPos_df);
+  out_data.positionViewSpace = viewPos;
+
   if (enableMaxSizeControl) {
     float desiredAngleRadians = radians(maxAngularSize * 0.5);
 
-    vec3 camToPos = df64_vec3_sub(
-      dpos.xyz,
-      vec3(0.0),
-      cameraPosition_hi,
-      cameraPosition_lo
-    );
-    float distanceToCamera = length(camToPos);
+    float distanceToCamera = length(viewPos.xyz);
     float pointSize = length(scaledRight);
     float angle = atan(pointSize / distanceToCamera);
 
@@ -167,14 +168,6 @@ void main() {
       scaledUp *= correctionScaleFactor;
     }
   }
-
-  vec4 viewPos = df64_mat4_mul_vec4(
-    cameraViewMatrix_hi,
-    cameraViewMatrix_lo,
-    dpos.xyz,
-    1.0
-  );
-  out_data.positionViewSpace = viewPos;
 
   vec4 dposClip = projectionMatrix * viewPos;
 

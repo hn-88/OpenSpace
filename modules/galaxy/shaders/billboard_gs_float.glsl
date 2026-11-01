@@ -55,50 +55,62 @@ void main() {
   out_data.position = gl_in[0].gl_Position;
   out_data.color = in_data[0].color;
 
-  vec4 dpos = df64_mat4_mul_vec4(
+  df64_vec4 dpos = df64_mat4_mul_vec4(
     modelMatrix_hi,
     modelMatrix_lo,
-    out_data.position.xyz * 8.0,
-    out_data.position.w
+    vec4(out_data.position.xyz * 8.0, out_data.position.w)
   );
-  dpos.xyz /= Parsec;
+  dpos.hi.xyz /= Parsec;
+  dpos.lo.xyz /= Parsec;
 
-  vec3 eyeDiff = df64_vec3_sub(eyePosition_hi, eyePosition_lo, dpos.xyz, vec3(0.0));
+  vec3 eyeDiff = df64_vec3_sub(eyePosition_hi, eyePosition_lo, dpos.hi.xyz, dpos.lo.xyz);
   vec3 normal = normalize(eyeDiff);
   vec3 newRight = normalize(cross(cameraUp, normal));
   vec3 newUp = cross(normal, newRight);
   vec3 scaledRight = 32.0 * newRight;
   vec3 scaledUp = 32.0 * newUp;
 
-  vec4 bottomLeftVertex = z_normalization(df64_mat4_mul_vec4(
+  df64_vec4 bl_pos = df64_vec4(
+    dpos.hi - vec4(scaledRight + scaledUp, 0.0),
+    dpos.lo
+  );
+  vec4 bottomLeftVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
     viewProjectionMatrix_hi,
     viewProjectionMatrix_lo,
-    dpos.xyz - scaledRight - scaledUp,
-    dpos.w
-  ));
+    bl_pos
+  )));
 
   out_data.screenSpaceDepth = bottomLeftVertex.w;
 
-  vec4 topRightVertex = z_normalization(df64_mat4_mul_vec4(
+  df64_vec4 tr_pos = df64_vec4(
+    dpos.hi + vec4(scaledUp + scaledRight, 0.0),
+    dpos.lo
+  );
+  vec4 topRightVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
     viewProjectionMatrix_hi,
     viewProjectionMatrix_lo,
-    dpos.xyz + scaledUp + scaledRight,
-    dpos.w
-  ));
+    tr_pos
+  )));
 
-  vec4 bottomRightVertex = z_normalization(df64_mat4_mul_vec4(
+  df64_vec4 br_pos = df64_vec4(
+    dpos.hi + vec4(scaledRight - scaledUp, 0.0),
+    dpos.lo
+  );
+  vec4 bottomRightVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
     viewProjectionMatrix_hi,
     viewProjectionMatrix_lo,
-    dpos.xyz + scaledRight - scaledUp,
-    dpos.w
-  ));
+    br_pos
+  )));
 
-  vec4 topLeftVertex = z_normalization(df64_mat4_mul_vec4(
+  df64_vec4 tl_pos = df64_vec4(
+    dpos.hi + vec4(scaledUp - scaledRight, 0.0),
+    dpos.lo
+  );
+  vec4 topLeftVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
     viewProjectionMatrix_hi,
     viewProjectionMatrix_lo,
-    dpos.xyz + scaledUp - scaledRight,
-    dpos.w
-  ));
+    tl_pos
+  )));
 
   // Build primitive
   gl_Position = topLeftVertex;

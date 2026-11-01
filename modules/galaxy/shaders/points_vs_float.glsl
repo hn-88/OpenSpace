@@ -53,20 +53,20 @@ void main() {
   float distanceToStar = length(eyeDiff);
   out_data.starBrightness = clamp(8000.0 * Parsec / distanceToStar, 0.0, 1.0);
 
-  vec4 dpos = df64_mat4_mul_vec4(
+  df64_vec4 dpos = df64_mat4_mul_vec4(
     modelMatrix_hi,
     modelMatrix_lo,
-    in_position * 8.0,
-    1.0
+    vec4(in_position * 8.0, 1.0)
   );
-  dpos.xyz /= Parsec;
+  dpos.hi.xyz /= Parsec;
+  dpos.lo.xyz /= Parsec;
 
-  gl_Position = z_normalization(df64_mat4_mul_vec4(
+  df64_vec4 clipPos = df64_mat4_mul_df64_vec4(
     viewProjectionMatrix_hi,
     viewProjectionMatrix_lo,
-    dpos.xyz,
-    dpos.w
-  ));
+    dpos
+  );
+  gl_Position = z_normalization(df64_vec4_to_vec4(clipPos));
   out_data.color = in_color;
   out_data.screenSpaceDepth = gl_Position.w;
 }
