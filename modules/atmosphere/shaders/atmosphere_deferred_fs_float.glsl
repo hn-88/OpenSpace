@@ -464,7 +464,7 @@ void main() {
   vec3  positionObjectsCoords;
   vec4  normal;
   float daylightFactor;
-  df64_vec4 posObj_m;
+  df64_vec4 posObj_m = df64_vec4(vec4(0.0), vec4(0.0));
 
   // Background / deep space check:
   // In OpenSpace, PosBufferClearVal = 1e32. If position is clear value or w == 0,
