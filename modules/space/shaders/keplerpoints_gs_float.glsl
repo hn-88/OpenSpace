@@ -92,7 +92,8 @@ void main() {
     right = cameraViewDirectionRight;
   }
   else {
-    vec3 normal = normalize(camPosToVertPos);
+    float m = max(abs(camPosToVertPos.x), max(abs(camPosToVertPos.y), abs(camPosToVertPos.z)));
+    vec3 normal = m > 0.0 ? normalize(camPosToVertPos / m) : vec3(0.0, 0.0, 1.0);
     right = normalize(cross(cameraUpWorld, normal));
     up = normalize(cross(normal, right));
   }
@@ -100,17 +101,6 @@ void main() {
   float initialSize = pow(10.0, pointSizeExponent);
   right *= initialSize;
   up *= initialSize;
-
-  float opp = length(right);
-  float adj = length(camPosToVertPos);
-  float angle = atan(opp / adj);
-  float maxAngle = radians(maxSize * 0.5);
-
-  if (enableMaxSize && (angle > maxAngle) && (adj > 0.0)) {
-    float correction = (adj * tan(maxAngle)) / opp;
-    right *= correction;
-    up *= correction;
-  }
 
   df64_vec4 vertPosView_df = df64_mat4_mul_df64_vec4(
     viewTransform_hi,
@@ -121,6 +111,17 @@ void main() {
 
   vec3 upView = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, up, 0.0).xyz;
   vec3 rightView = df64_mat4_mul_vec4(viewTransform_hi, viewTransform_lo, right, 0.0).xyz;
+
+  float opp = length(rightView);
+  float adj = length(vertPosView.xyz);
+  float angle = (adj > 0.0) ? atan(opp / adj) : 0.0;
+  float maxAngle = radians(maxSize * 0.5);
+
+  if (enableMaxSize && (angle > maxAngle) && (opp > 0.0)) {
+    float correction = (adj * tan(maxAngle)) / opp;
+    rightView *= correction;
+    upView *= correction;
+  }
 
   out_data.viewSpace = z_normalization(projectionTransform * vertPosView);
   out_data.projectionViewDepth = out_data.viewSpace.w;

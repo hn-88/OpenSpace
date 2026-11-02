@@ -123,12 +123,14 @@ void main() {
     scaledUp = up;
   }
   else if (renderOption == RenderOptionCameraPositionNormal) {
-    vec3 normal = normalize(df64_vec3_sub(
+    vec3 diff = df64_vec3_sub(
       cameraPosition_hi,
       cameraPosition_lo,
       dpos.hi.xyz,
       dpos.lo.xyz
-    ));
+    );
+    float m = max(abs(diff.x), max(abs(diff.y), abs(diff.z)));
+    vec3 normal = m > 0.0 ? normalize(diff / m) : vec3(0.0, 0.0, 1.0);
     vec3 newRight = normalize(cross(cameraLookUp, normal));
     vec3 newUp = cross(normal, newRight);
 
@@ -154,37 +156,36 @@ void main() {
   vec4 viewPos = df64_vec4_to_vec4(viewPos_df);
   out_data.positionViewSpace = viewPos;
 
-  if (enableMaxSizeControl) {
-    float desiredAngleRadians = radians(maxAngularSize * 0.5);
-
-    float distanceToCamera = length(viewPos.xyz);
-    float pointSize = length(scaledRight);
-    float angle = atan(pointSize / distanceToCamera);
-
-    if ((angle > desiredAngleRadians) && (distanceToCamera > 0.0)) {
-      float correctionScaleFactor =
-        distanceToCamera * tan(desiredAngleRadians) / pointSize;
-      scaledRight *= correctionScaleFactor;
-      scaledUp *= correctionScaleFactor;
-    }
-  }
-
-  vec4 dposClip = projectionMatrix * viewPos;
-
   vec4 scaledRightView = df64_mat4_mul_vec4(
     cameraViewMatrix_hi,
     cameraViewMatrix_lo,
     scaledRight,
     0.0
   );
-  vec4 scaledRightClip = scaleFactor * aspectRatioScale.x * (projectionMatrix * scaledRightView);
-
   vec4 scaledUpView = df64_mat4_mul_vec4(
     cameraViewMatrix_hi,
     cameraViewMatrix_lo,
     scaledUp,
     0.0
   );
+
+  if (enableMaxSizeControl) {
+    float desiredAngleRadians = radians(maxAngularSize * 0.5);
+
+    float distanceToCamera = length(viewPos.xyz);
+    float pointSize = length(scaledRightView.xyz);
+    float angle = (distanceToCamera > 0.0) ? atan(pointSize / distanceToCamera) : 0.0;
+
+    if ((angle > desiredAngleRadians) && (pointSize > 0.0)) {
+      float correctionScaleFactor =
+        distanceToCamera * tan(desiredAngleRadians) / pointSize;
+      scaledRightView *= correctionScaleFactor;
+      scaledUpView *= correctionScaleFactor;
+    }
+  }
+
+  vec4 dposClip = projectionMatrix * viewPos;
+  vec4 scaledRightClip = scaleFactor * aspectRatioScale.x * (projectionMatrix * scaledRightView);
   vec4 scaledUpClip = scaleFactor * aspectRatioScale.y * (projectionMatrix * scaledUpView);
 
   vec4 initialPosition = z_normalization(dposClip - scaledRightClip - scaledUpClip);
