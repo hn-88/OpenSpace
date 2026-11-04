@@ -49,17 +49,21 @@ const float Parsec = 3.08567756E16;
 void main() {
   out_data.position = vec4(in_position, 1.0);
 
-  vec3 eyeDiff = df64_vec3_sub(in_position, vec3(0.0), eyePosition_hi, eyePosition_lo);
-  float distanceToStar = length(eyeDiff);
-  out_data.starBrightness = clamp(8000.0 * Parsec / distanceToStar, 0.0, 1.0);
+  // Compute distance in parsecs to avoid float overflow:
+  // 8000 * Parsec / dist_meters = 8000 / (dist_meters / Parsec) = 8000 / dist_pc
+  vec3 eyePos_pc = (eyePosition_hi + eyePosition_lo) / Parsec;
+  vec3 starPos_pc = in_position / Parsec;
+  float dist_pc = length(starPos_pc - eyePos_pc);
+  out_data.starBrightness = dist_pc > 0.0 ? clamp(8000.0 / dist_pc, 0.0, 1.0) : 1.0;
 
   df64_vec4 dpos = df64_mat4_mul_vec4(
     modelMatrix_hi,
     modelMatrix_lo,
     vec4(in_position * 8.0, 1.0)
   );
-  dpos.hi.xyz /= Parsec;
-  dpos.lo.xyz /= Parsec;
+  // In upstream, dpos is a dvec4, so dpos /= Parsec divides ALL 4 components (including w) by Parsec.
+  dpos.hi /= Parsec;
+  dpos.lo /= Parsec;
 
   df64_vec4 clipPos = df64_mat4_mul_df64_vec4(
     viewProjectionMatrix_hi,

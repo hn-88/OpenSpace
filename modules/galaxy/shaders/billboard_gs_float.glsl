@@ -60,18 +60,23 @@ void main() {
     modelMatrix_lo,
     vec4(out_data.position.xyz * 8.0, out_data.position.w)
   );
-  dpos.hi.xyz /= Parsec;
-  dpos.lo.xyz /= Parsec;
+  // In upstream, dpos is a dvec4, so dpos /= Parsec divides ALL 4 components (including w) by Parsec.
+  dpos.hi /= Parsec;
+  dpos.lo /= Parsec;
 
-  vec3 eyeDiff = df64_vec3_sub(eyePosition_hi, eyePosition_lo, dpos.hi.xyz, dpos.lo.xyz);
-  vec3 normal = normalize(eyeDiff);
+  // Compute normal in parsecs to prevent float overflow (FLT_MAX = 3.4e38, but squared meters = ~1e41).
+  vec3 eyePos_pc = (eyePosition_hi + eyePosition_lo) / Parsec;
+  vec3 dpos_pc = dpos.hi.xyz + dpos.lo.xyz;
+  vec3 eyeDiff = eyePos_pc - dpos_pc;
+  float m = max(abs(eyeDiff.x), max(abs(eyeDiff.y), abs(eyeDiff.z)));
+  vec3 normal = m > 0.0 ? normalize(eyeDiff / m) : vec3(0.0, 0.0, 1.0);
   vec3 newRight = normalize(cross(cameraUp, normal));
   vec3 newUp = cross(normal, newRight);
   vec3 scaledRight = 32.0 * newRight;
   vec3 scaledUp = 32.0 * newUp;
 
   df64_vec4 bl_pos = df64_vec4(
-    dpos.hi - vec4(scaledRight + scaledUp, 0.0),
+    vec4(dpos.hi.xyz - scaledRight - scaledUp, dpos.hi.w),
     dpos.lo
   );
   vec4 bottomLeftVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
@@ -83,7 +88,7 @@ void main() {
   out_data.screenSpaceDepth = bottomLeftVertex.w;
 
   df64_vec4 tr_pos = df64_vec4(
-    dpos.hi + vec4(scaledUp + scaledRight, 0.0),
+    vec4(dpos.hi.xyz + scaledUp + scaledRight, dpos.hi.w),
     dpos.lo
   );
   vec4 topRightVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
@@ -93,7 +98,7 @@ void main() {
   )));
 
   df64_vec4 br_pos = df64_vec4(
-    dpos.hi + vec4(scaledRight - scaledUp, 0.0),
+    vec4(dpos.hi.xyz + scaledRight - scaledUp, dpos.hi.w),
     dpos.lo
   );
   vec4 bottomRightVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
@@ -103,7 +108,7 @@ void main() {
   )));
 
   df64_vec4 tl_pos = df64_vec4(
-    dpos.hi + vec4(scaledUp - scaledRight, 0.0),
+    vec4(dpos.hi.xyz + scaledUp - scaledRight, dpos.hi.w),
     dpos.lo
   );
   vec4 topLeftVertex = z_normalization(df64_vec4_to_vec4(df64_mat4_mul_df64_vec4(
